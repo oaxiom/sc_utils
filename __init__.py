@@ -1,3 +1,3 @@
 
-from .utils import sparsify
+from .utils import sparsify, export_dense
 

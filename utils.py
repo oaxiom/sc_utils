@@ -28,3 +28,34 @@ def sparsify(filename):
     del data
     return ad
 
+def export_dense(adata, gene_name_filename, group_filename, dense_filename):
+    '''
+    **Purpose**
+        Export a dense representation for bug testing and things like scran and
+        seurat
+    '''
+    oh = open(gene_name_filename, 'w')
+    for g in adata.var_names:
+        oh.write('%s\n' % g)
+    oh.close()
+
+    # Save the groups:
+    print('Save groups')
+    input_groups = adata_pp.obs['groups']
+    input_groups.to_csv(group_filename, sep='\t')
+    print(input_groups)
+    del adata_pp
+
+    print('Save dense matrix')
+    # save data_mat and go into R:
+    #data_mat = adata.X.T.tocsr() # This one is dense already
+    data_mat = adata.X # This one is dense already
+    # Save out a dense array of the sparse array:
+    oh = open(dense_filename, 'w')
+    for i in range(data_mat.shape[0]):
+
+        if i % 100 == 0:
+            print('%s/%s' % (i, data_mat.shape[0]))
+
+        oh.write('\t'.join([str(i) for i in data_mat.getrow(i).toarray()[0,:]]))
+    oh.close()
