@@ -1,8 +1,9 @@
 
+import scipy as sp
 import pandas as pd
 from anndata import AnnData
 
-def sparsify(filename):
+def sparsify(filename, csv=True):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
@@ -10,7 +11,10 @@ def sparsify(filename):
 
     '''
     print('Sparsifying {0}'.format(filename))
-    data = pd.read_csv(filename, index_col=0, header=0)
+    if csv:
+        data = pd.read_csv(filename, index_col=0, header=0)
+    else:
+        data = pd.read_csv(filename, index_col=0, header=0, sep='\t')
     genes = data.columns
     cells = data.index
     data = sp.sparse.csr_matrix(data.to_numpy())
