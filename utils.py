@@ -125,6 +125,8 @@ def merge_barcode_umi_fastqs(barcode_fastq, umi_fastq, output_fastq, gzip=True):
     assert os.path.exists(barcode_fastq), '{0} barcode_fastq not found'.format(barcode_fastq)
     assert os.path.exists(umi_fastq), '{0} barcode_fastq not found'.format(umi_fastq)
 
+    print('Started {0}'.format(output_fastq))
+
     barcode_len = 0
     umi_len = 0
 
@@ -134,9 +136,8 @@ def merge_barcode_umi_fastqs(barcode_fastq, umi_fastq, output_fastq, gzip=True):
         output = open(output_fastq, 'wt')
 
     for idx, read in enumerate(fastqPE(barcode_fastq, umi_fastq)):
-        if (idx+1) % 100 == 0:
+        if (idx+1) % 100000 == 0:
             print('Done {:,}'.format(idx+1))
-            break
 
         output.write('{0}\n'.format(read[0]['name']))
         output.write('{0}{1}\n'.format(read[0]['seq'], read[1]['seq']))
