@@ -40,7 +40,7 @@ def fastqPE(filename1, filename2, gzip=True):
     return
 
 
-def sparsify(filename, csv=True):
+def sparsify(filename, obs_add, csv=True):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
@@ -67,6 +67,10 @@ def sparsify(filename, csv=True):
     print('Loaded {0}'.format(filename))
     ad = AnnData(data, obs={'obs_names': cells}, var={'var_names': genes})
     del data
+
+    for k in obs_add:
+        ad.obs[k] = obs_add[k]
+
     return ad
 
 def export_dense(adata, gene_name_filename, group_filename, dense_filename):
