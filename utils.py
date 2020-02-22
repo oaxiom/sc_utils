@@ -47,13 +47,14 @@ def sparsify(filename, obs_add, csv=True):
         AnnData object
 
     '''
-    print('Sparsifying {0}'.format(filename))
+    print('Started {0}'.format(filename))
     if csv:
         data = pd.read_csv(filename, index_col=0, header=0)
     else:
         data = pd.read_csv(filename, index_col=0, header=0, sep='\t')
     genes = data.columns
     cells = data.index
+    print('Sparsifying {0}'.format(filename))
     data = sp.sparse.csr_matrix(data.to_numpy())
     data.astype('float32')
 
