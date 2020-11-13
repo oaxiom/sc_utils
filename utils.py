@@ -66,12 +66,12 @@ def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
                     continue
                 todrop.append(i)
 
-        data.drop(todrop, axis=1)
+        data = data.drop(todrop, axis=1)
         print('Dropped {} fusions'.format(len(todrop)))
 
     if drop_mir:
         todrop = [i for i in genes if i[0:3] == 'MIR']
-        data.drop(todrop, axis=1)
+        data = data.drop(todrop, axis=1)
         print('Dropped {} MIR'.format(len(todrop)))
 
     cells = data.index
