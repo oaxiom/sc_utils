@@ -40,7 +40,7 @@ def fastqPE(filename1, filename2, gzip=True):
     return
 
 
-def sparsify(filename, obs_add, csv=True):
+def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
@@ -52,9 +52,30 @@ def sparsify(filename, obs_add, csv=True):
         data = pd.read_csv(filename, index_col=0, header=0)
     else:
         data = pd.read_csv(filename, index_col=0, header=0, sep='\t')
+
     genes = data.columns
+
+    todrop = []
+    if drop_fusions:
+        # drop genes with - in the form, but not -AS
+        for i in genes:
+            if '-' in i:
+                if '-AS' in i:
+                    continue
+                if '-int' in i:
+                    continue
+                todrop.append(i)
+
+        data.drop(todrop, axis=1)
+        print('Dropped {} fusions'.format(len(todrop)))
+
+    if drop_mir:
+        todrop = [i for i in genes if i[0:3] == 'MIR']
+        data.drop(todrop, axis=1)
+        print('Dropped {} MIR'.format(len(todrop)))
+
     cells = data.index
-    print('Sparsifying {0}'.format(filename))
+    print('Sparsifying')
     data = sp.sparse.csr_matrix(data.to_numpy())
     data.astype('float32')
 
@@ -65,13 +86,14 @@ def sparsify(filename, obs_add, csv=True):
     oh.close()
     '''
 
-    print('Loaded {0}'.format(filename))
+    print('Loaded')
     ad = AnnData(data, obs={'obs_names': cells}, var={'var_names': genes})
     del data
 
     for k in obs_add:
         ad.obs[k] = obs_add[k]
 
+    print('Done')
     return ad
 
 def export_dense(adata, gene_name_filename, group_filename, dense_filename):
