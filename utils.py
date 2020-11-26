@@ -54,7 +54,6 @@ def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
         data = pd.read_csv(filename, index_col=0, header=0, sep='\t')
 
     genes = data.columns
-
     todrop = []
     if drop_fusions:
         # drop genes with - in the form, but not -AS
@@ -66,13 +65,16 @@ def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
                     continue
                 todrop.append(i)
 
-        data = data.drop(todrop, axis=1)
+        data.drop(todrop, axis=1, inplace=True)
         print('Dropped {} fusions'.format(len(todrop)))
 
+    genes = data.columns
     if drop_mir:
         todrop = [i for i in genes if i[0:3] == 'MIR']
-        data = data.drop(todrop, axis=1)
+        data.drop(todrop, axis=1, inplace=True)
         print('Dropped {} MIR'.format(len(todrop)))
+
+    genes = data.columns
 
     cells = data.index
     print('Sparsifying')
