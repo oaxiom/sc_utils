@@ -1,5 +1,5 @@
 
-import sys, os
+import sys, os, time, numpy
 import gzip as gzipfile
 import scipy as sp
 import pandas as pd
@@ -40,6 +40,57 @@ def fastqPE(filename1, filename2, gzip=True):
     return
 
 
+def sparsify_quicker(filename, obs_add, min_counts=2000, csv=True):
+    '''
+    **Purpose**
+        Convert a dense array in filename into a sparse array and return a
+        AnnData object
+
+    '''
+    print('Started {0}'.format(filename))
+    s = time.time()
+    data = []
+    barcodes = []
+    __filtered = 0
+    if csv:
+        sep = ','
+    else:
+        sep = '\t'
+
+    oh = gzipfile.open(filename, 'rt')
+    for i, line in enumerate(oh):
+        if (i+1) % 1000 == 0:
+            print(i+1)
+        if i == 0:
+            genes = line.split(sep)[1:]
+            continue
+
+        t = line.split(sep)
+        cts = [float(c) for c in t[1:]]
+        if sum(cts) < min_counts:
+            __filtered += 1
+            continue
+        barcodes.append(t[0])
+        data.append(cts)
+
+    print('Loaded Data, filtered {} for min_counts={}'.format(__filtered, min_counts))
+
+    print('Sparsifying {}'.format(len(data), len(data[0])))
+    data = sp.sparse.csr_matrix(numpy.array(data))
+    data.astype('float32')
+
+    print('Load into AnnData')
+    ad = AnnData(data, obs={'obs_names': barcodes}, var={'var_names': genes})
+    del data
+
+    for k in obs_add:
+        ad.obs[k] = obs_add[k]
+
+    e = time.time()
+    print('Done {:.1f}'.format(e-s))
+
+    return ad
+
 def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
     '''
     **Purpose**
@@ -48,10 +99,12 @@ def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
 
     '''
     print('Started {0}'.format(filename))
+    s = time.time()
     if csv:
         data = pd.read_csv(filename, index_col=0, header=0)
     else:
         data = pd.read_csv(filename, index_col=0, header=0, sep='\t')
+    print('Loaded PD')
 
     genes = data.columns
     todrop = []
@@ -77,7 +130,7 @@ def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
     genes = data.columns
 
     cells = data.index
-    print('Sparsifying')
+    print('Sparsifying {}'.format(data.shape))
     data = sp.sparse.csr_matrix(data.to_numpy())
     data.astype('float32')
 
@@ -95,7 +148,8 @@ def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
     for k in obs_add:
         ad.obs[k] = obs_add[k]
 
-    print('Done')
+    e = time.time()
+    print('Done {:.1f}'.format(e-s))
     return ad
 
 def export_dense(adata, gene_name_filename, group_filename, dense_filename):
@@ -134,7 +188,7 @@ def merge_barcode_umi_fastqs(barcode_fastq, umi_fastq, output_fastq, gzip=True):
     """
     **Purpose**
         Some FASTQ data (especially early version1 10x data) has the barcode and UMIs in a separate file.
-        But STARsolo and newer cellreanger (and other tools) require the CB and UMI to be merged into a
+        But STARsolo and newer cellranger (and other tools) require the CB and UMI to be merged into a
         single FASTQ.
 
     **Arguments**
@@ -154,7 +208,7 @@ def merge_barcode_umi_fastqs(barcode_fastq, umi_fastq, output_fastq, gzip=True):
     assert os.path.exists(barcode_fastq), '{0} barcode_fastq not found'.format(barcode_fastq)
     assert os.path.exists(umi_fastq), '{0} barcode_fastq not found'.format(umi_fastq)
 
-    print('Started {0}'.format(output_fastq))
+    print('Started {}'.format(output_fastq))
 
     barcode_len = 0
     umi_len = 0
