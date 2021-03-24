@@ -73,9 +73,9 @@ def sparsify_quicker(filename, obs_add, min_counts=2000, csv=True):
         barcodes.append(t[0])
         data.append(cts)
 
-    print('Loaded Data, filtered {} for min_counts={}'.format(__filtered, min_counts))
+    print('Loaded Data, filtered out {} cells for min_counts={}'.format(__filtered, min_counts))
 
-    print('Sparsifying {}'.format(len(data), len(data[0])))
+    print('Sparsifying {} cells {} genes'.format(len(data), len(data[0])))
     data = sp.sparse.csr_matrix(numpy.array(data))
     data.astype('float32')
 
