@@ -91,59 +91,73 @@ def sparsify_quicker(filename, obs_add, min_counts=2000, csv=True):
 
     return ad
 
-def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False):
+def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False, ensg_to_symbol=None):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
         AnnData object
 
     '''
-    print('Started {0}'.format(filename))
+    print('Started {}'.format(filename))
     s = time.time()
     if csv:
         data = pd.read_csv(filename, index_col=0, header=0)
     else:
         data = pd.read_csv(filename, index_col=0, header=0, sep='\t')
-    print('Loaded PD')
+    print('Loaded Data Frame')
 
-    genes = data.columns
-    todrop = []
-    if drop_fusions:
+    if ensg_to_symbol: # Fix the table so it has
+        gene_ensg = data.columns
+        gene_names = []
+
+        for ensg in gene_ensg:
+            if ensg not in ensg_to_symbol:
+                gene_names.append(ensg)
+            else:
+                gene_names.append(ensg_to_symbol[ensg])
+
+    else: # Just use the inbuilt labels;
+        gene_names = data.columns
+        gene_ensg = gene_names
+
+
+    if drop_fusions or drop_mir:
+        todrop = []
+        record_of_drops = []
         # drop genes with - in the form, but not -AS
-        for i in genes:
-            if '-' in i:
-                if '-AS' in i:
-                    continue
-                if '-int' in i:
-                    continue
-                todrop.append(i)
+        for n, e in zip(gene_names, gene_ensg):
+            if drop_fusions and '-' in n:
+                if 'ENS' not in e: continue
+                if '-AS' in n: continue
+                if '-int' in n: continue
+                if 'Nkx' in n: continue # mouse genes
+                if 'Krtap' in n: continue
+                if ':' in n: continue # Don't drop TEs!
+                todrop.append(e)
+                record_of_drops.append(n)
 
+            if drop_mir and n[0:3] == 'MIR' or n[0:3] == 'mir':
+                if 'ENS' not in e: continue
+                if 'hg' in e.lower(): continue # host genes;
+                if ':' in n: continue # Don't drop TEs!
+                todrop.append(e)
+                record_of_drops.append(n)
+
+        [gene_names.remove(n) for n in record_of_drops]
         data.drop(todrop, axis=1, inplace=True)
+        gene_ensg = data.columns # remap;
+        print(record_of_drops)
         print('Dropped {} fusions'.format(len(todrop)))
-
-    genes = data.columns
-    if drop_mir:
-        todrop = [i for i in genes if i[0:3] == 'MIR']
-        data.drop(todrop, axis=1, inplace=True)
-        print('Dropped {} MIR'.format(len(todrop)))
-
-    genes = data.columns
 
     cells = data.index
     print('Sparsifying {}'.format(data.shape))
     data = sp.sparse.csr_matrix(data.to_numpy())
     data.astype('float32')
 
-    '''
-    oh = open('gene_names.{0}.tsv'.format(os.path.split(filename)[1]), 'w')
-    for g in genes:
-        oh.write('%s\n' % g)
-    oh.close()
-    '''
-
     print('Loaded')
-    ad = AnnData(data, obs={'obs_names': cells}, var={'var_names': genes})
+    ad = AnnData(data, obs={'obs_names': cells}, var={'var_names': gene_names, 'names': gene_ensg})
     del data
+    ad.var_names_make_unique()
 
     for k in obs_add:
         ad.obs[k] = obs_add[k]
