@@ -109,9 +109,13 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
     print('Started {}'.format(filename))
     s = time.time()
     if csv:
-        data = pd.read_csv(filename, index_col=0, header=0)
+        data = pd.read_csv(filename, index_col=0, header=0,
+            encoding='utf-8', compression='gzip', dtype={'x': int},
+            engine='c')
     else:
-        data = pd.read_csv(filename, index_col=0, header=0, sep='\t')
+        data = pd.read_csv(filename, index_col=0, header=0, sep='\t',
+        encoding='utf-8', compression='gzip', dtype={'x': int},
+        engine='c')
     print('Loaded Data Frame')
 
     if ensg_to_symbol: # Fix the table so it has
@@ -125,8 +129,8 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
                 gene_names.append(ensg_to_symbol[ensg])
 
     else: # Just use the inbuilt labels;
-        gene_names = data.columns
-        gene_ensg = list(gene_names)
+        gene_names = list(data.columns)
+        gene_ensg = data.columns
 
     if drop_fusions or drop_mir:
         todrop = []
@@ -150,7 +154,9 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
                 todrop.append(e)
                 record_of_drops.append(n)
 
-        [gene_names.remove(n) for n in record_of_drops]
+        #print(record_of_drops)
+        #print(gene_names)
+        [gene_names.remove(n) for n in set(record_of_drops)]
         data.drop(todrop, axis=1, inplace=True)
         gene_ensg = data.columns # remap;
         print(record_of_drops)
