@@ -99,7 +99,7 @@ def sparsify_quicker(filename, obs_add, min_counts=2000, csv=True):
 
     return ad
 
-def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False, ensg_to_symbol=None):
+def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to_symbol=None):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
