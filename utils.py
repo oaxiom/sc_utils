@@ -4,6 +4,14 @@ import gzip as gzipfile
 import scipy as sp
 import pandas as pd
 from anndata import AnnData
+import matplotlib.cm as cm
+import numpy as np
+from matplotlib import colors
+
+colors1 = cm.Greys_r(np.linspace(0.8,0.9,20))
+colors2 = cm.Reds(np.linspace(0.0, 1, 100))
+colorsComb = np.vstack([colors1, colors2])
+cmap_grey_red = colors.LinearSegmentedColormap.from_list('cmap_grey_red', colorsComb)
 
 def fastqPE(filename1, filename2, gzip=True):
     """
@@ -120,14 +128,13 @@ def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False, en
         gene_names = data.columns
         gene_ensg = gene_names
 
-
     if drop_fusions or drop_mir:
         todrop = []
         record_of_drops = []
         # drop genes with - in the form, but not -AS
         for n, e in zip(gene_names, gene_ensg):
             if drop_fusions and '-' in n:
-                if 'ENS' not in e: continue
+                if ensg_to_symbol and 'ENS' not in e: continue
                 if '-AS' in n: continue
                 if '-int' in n: continue
                 if 'Nkx' in n: continue # mouse genes
@@ -137,7 +144,7 @@ def sparsify(filename, obs_add, csv=True, drop_fusions=False, drop_mir=False, en
                 record_of_drops.append(n)
 
             if drop_mir and n[0:3] == 'MIR' or n[0:3] == 'mir':
-                if 'ENS' not in e: continue
+                if ensg_to_symbol and 'ENS' not in e: continue
                 if 'hg' in e.lower(): continue # host genes;
                 if ':' in n: continue # Don't drop TEs!
                 todrop.append(e)
