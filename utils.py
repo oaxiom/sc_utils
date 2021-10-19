@@ -126,7 +126,7 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
 
     else: # Just use the inbuilt labels;
         gene_names = data.columns
-        gene_ensg = gene_names
+        gene_ensg = list(gene_names)
 
     if drop_fusions or drop_mir:
         todrop = []
