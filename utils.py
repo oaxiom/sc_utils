@@ -106,6 +106,9 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
         AnnData object
 
     '''
+    if drop_mir: assert ensg_to_symbol, 'Asked to drop_mir, but no ensg_to_symbol specified'
+    if drop_fusions: assert ensg_to_symbol, 'Asked to drop_mir, but no ensg_to_symbol specified'
+
     print('Started {}'.format(filename))
     s = time.time()
     if csv:
@@ -133,12 +136,17 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
         gene_ensg = data.columns
 
     if drop_fusions or drop_mir:
+        # ensg_to_symbol must be valid to get here;
         todrop = []
         record_of_drops = []
         # drop genes with - in the form, but not -AS
         for n, e in zip(gene_names, gene_ensg):
+            if '?' in e:
+                todrop.append(e)
+                record_of_drops.append(n)
+
             if drop_fusions and '-' in n:
-                if ensg_to_symbol and 'ENS' not in e: continue
+                if 'ENS' not in e: continue
                 if '-AS' in n: continue
                 if '-int' in n: continue
                 if 'Nkx' in n: continue # mouse genes
@@ -148,18 +156,15 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
                 record_of_drops.append(n)
 
             if drop_mir and n[0:3] == 'MIR' or n[0:3] == 'mir':
-                if ensg_to_symbol and 'ENS' not in e: continue
+                if 'ENS' not in e: continue
                 if 'hg' in e.lower(): continue # host genes;
                 if ':' in n: continue # Don't drop TEs!
                 todrop.append(e)
                 record_of_drops.append(n)
 
-        #print(record_of_drops)
-        #print(gene_names)
-        [gene_names.remove(n) for n in set(record_of_drops)]
         data.drop(todrop, axis=1, inplace=True)
-        gene_ensg = data.columns # remap;
-        print(record_of_drops)
+        gene_ensg = data.columns # remap; # rebuild the gene names inde to avoid probelms with duplicate name/ensg? drops
+        gene_names = [ensg_to_symbol[e] for e in gene_ensg]
         print('Dropped {} fusions'.format(len(todrop)))
 
     cells = data.index
