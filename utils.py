@@ -164,6 +164,7 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
                 record_of_drops.append(n)
 
         data.drop(todrop, axis=1, inplace=True)
+        gene_names = []
         gene_ensg = data.columns # remap; # rebuild the gene names inde to avoid probelms with duplicate name/ensg? drops
         for ensg in gene_ensg:
             if ensg not in ensg_to_symbol:
