@@ -128,6 +128,7 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
         for ensg in gene_ensg:
             if ensg not in ensg_to_symbol:
                 gene_names.append(ensg)
+                print(f'Warning: {ensg} not found')
             else:
                 gene_names.append(ensg_to_symbol[ensg])
 
@@ -164,7 +165,13 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
 
         data.drop(todrop, axis=1, inplace=True)
         gene_ensg = data.columns # remap; # rebuild the gene names inde to avoid probelms with duplicate name/ensg? drops
-        gene_names = [ensg_to_symbol[e] for e in gene_ensg]
+        for ensg in gene_ensg:
+            if ensg not in ensg_to_symbol:
+                gene_names.append(ensg)
+                #print(f'Warning: {ensg} not found')
+            else:
+                gene_names.append(ensg_to_symbol[ensg])
+
         print('Dropped {} fusions'.format(len(todrop)))
 
     cells = data.index
