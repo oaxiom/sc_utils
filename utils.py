@@ -128,7 +128,8 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
         for ensg in gene_ensg:
             if ensg not in ensg_to_symbol:
                 gene_names.append(ensg)
-                print(f'Warning: {ensg} not found')
+                if '?' not in ensg: # Only print the warning if not a ? marked TE
+                    print(f'Warning: {ensg} not found')
             else:
                 gene_names.append(ensg_to_symbol[ensg])
 
@@ -173,7 +174,7 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
             else:
                 gene_names.append(ensg_to_symbol[ensg])
 
-        print('Dropped {} fusions'.format(len(todrop)))
+        print('Dropped {} fusions/mirs'.format(len(todrop)))
 
     cells = data.index
     print('Sparsifying {}'.format(data.shape))
