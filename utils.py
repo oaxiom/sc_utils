@@ -99,26 +99,34 @@ def sparsify_quicker(filename, obs_add, min_counts=2000, csv=True):
 
     return ad
 
-def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to_symbol=None):
+def sparsify(filename=None, pandas_data_frame=None, obs_add=None, csv=False, drop_fusions=False, drop_mir=False, ensg_to_symbol=None):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
         AnnData object
 
     '''
+    assert filename or (pandas_data_frame is not None), 'You must specify one of filename or pandas_data_frame'
+    assert not (filename and (pandas_data_frame is not None)), 'You must specify only one of filename or pandas_data_frame'
+    assert obs_add, 'obs_add needs to be provided'
+
     if drop_mir: assert ensg_to_symbol, 'Asked to drop_mir, but no ensg_to_symbol specified'
     if drop_fusions: assert ensg_to_symbol, 'Asked to drop_mir, but no ensg_to_symbol specified'
 
     print('Started {}'.format(filename))
     s = time.time()
-    if csv:
-        data = pd.read_csv(filename, index_col=0, header=0,
-            encoding='utf-8', compression='gzip', dtype={'x': int},
-            engine='c')
+    if filename:
+        if csv:
+            data = pd.read_csv(filename, index_col=0, header=0,
+                encoding='utf-8', compression='gzip', dtype={'x': int},
+                engine='c')
+        else:
+            data = pd.read_csv(filename, index_col=0, header=0, sep='\t',
+                encoding='utf-8', compression='gzip', dtype={'x': int},
+                engine='c')
     else:
-        data = pd.read_csv(filename, index_col=0, header=0, sep='\t',
-        encoding='utf-8', compression='gzip', dtype={'x': int},
-        engine='c')
+        data = pandas_data_frame
+
     print('Loaded Data Frame')
 
     if ensg_to_symbol: # Fix the table so it has
@@ -148,6 +156,7 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
                 record_of_drops.append(n)
 
             if drop_fusions and '-' in n:
+                if n == 'ERVH48-1': continue # Don't drop this gene, it's not a fusion!
                 if 'ENS' not in e: continue
                 if '-AS' in n: continue
                 if '-int' in n: continue
@@ -182,6 +191,7 @@ def sparsify(filename, obs_add, csv, drop_fusions=False, drop_mir=False, ensg_to
     data.astype('float32')
 
     print('Loaded')
+    print({'obs_names': cells})
     ad = AnnData(data, obs={'obs_names': cells}, var={'var_names': gene_names, 'names': gene_ensg})
     del data
     ad.var_names_make_unique()
