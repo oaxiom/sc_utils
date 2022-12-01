@@ -315,8 +315,7 @@ def buildAnnDataFromStarForscVelo(path):
     ambiguous = sp.sparse.csr_matrix((mtxA[:,2], (mtxA[:,0]-1, mtxA[:,1]-1)), shape = shapeA).transpose()
 
     print('Loading Genes and Identifiers')
-    obs = pd.read_csv(os.path.join(path, 'Velocyto/raw/barcodes.tsv'),
-                  header=None, index_col=0)
+    obs = pd.read_csv(os.path.join(path, 'Velocyto/raw/barcodes.tsv'), header=None, index_col=0)
 
     # Remove index column name to make it compliant with the anndata format
     obs.index.name = None
@@ -325,7 +324,7 @@ def buildAnnDataFromStarForscVelo(path):
         names=('gene_ids', 'feature_types'), index_col=1)
 
     print('Build AnnData object to be used with ScanPy and ScVelo')
-    adata = anndata.AnnData(X=X, obs=obs, var=var,
+    adata = AnnData(X=X, obs=obs, var=var,
         layers = {'spliced': spliced, 'unspliced': unspliced, 'ambiguous': ambiguous})
     adata.var_names_make_unique()
 
