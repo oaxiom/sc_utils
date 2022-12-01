@@ -4,6 +4,7 @@ import gzip as gzipfile
 import scipy as sp
 import pandas as pd
 from anndata import AnnData
+import scanpy as sc
 import matplotlib.cm as cm
 import numpy as np
 from matplotlib import colors
@@ -281,3 +282,55 @@ def merge_barcode_umi_fastqs(barcode_fastq, umi_fastq, output_fastq, gzip=True):
     output.close()
 
     return {'barcode_len': barcode_len, 'umi_len': umi_len}
+
+# From:
+# https://github.com/alexdobin/STAR/issues/774#issuecomment-850477636
+def buildAnnDataFromStarForscVelo(path):
+    """
+    Generate an anndata object from the STAR aligner output folder
+    """
+    path=path
+    print('Load Read Counts')
+    X = sc.read_mtx(os.path.join(path, 'Gene/raw/matrix.mtx'))
+
+    # Transpose counts matrix to have Cells as rows and Genes as cols as expected by AnnData objects
+    X = X.X.transpose()
+
+    print('Loading Spliced, Unspliced and Ambiguous matrices')
+    mtxU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=3, delimiter=' ')
+    mtxS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=3, delimiter=' ')
+    mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=3, delimiter=' ')
+
+    # Extract sparse matrix shape informations from the third row
+    shapeU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+    shapeS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+    shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+
+    # Read the sparse matrix with csr_matrix((data, (row_ind, col_ind)), shape=(M, N))
+    # Subract -1 to rows and cols index because csr_matrix expects a 0 based index
+    # Transpose counts matrix to have Cells as rows and Genes as cols as expected by AnnData objects
+
+    spliced = sp.sparse.csr_matrix((mtxS[:,2], (mtxS[:,0]-1, mtxS[:,1]-1)), shape = shapeS).transpose()
+    unspliced = sp.sparse.csr_matrix((mtxU[:,2], (mtxU[:,0]-1, mtxU[:,1]-1)), shape = shapeU).transpose()
+    ambiguous = sp.sparse.csr_matrix((mtxA[:,2], (mtxA[:,0]-1, mtxA[:,1]-1)), shape = shapeA).transpose()
+
+    print('Loading Genes and Identifiers')
+    obs = pd.read_csv(os.path.join(path, 'Velocyto/raw/barcodes.tsv'),
+                  header=None, index_col=0)
+
+    # Remove index column name to make it compliant with the anndata format
+    obs.index.name = None
+
+    var = pd.read_csv(os.path.join(path, 'Velocyto/raw/features.tsv'), sep='\t',
+        names=('gene_ids', 'feature_types'), index_col=1)
+
+    print('Build AnnData object to be used with ScanPy and ScVelo')
+    adata = anndata.AnnData(X=X, obs=obs, var=var,
+        layers = {'spliced': spliced, 'unspliced': unspliced, 'ambiguous': ambiguous})
+    adata.var_names_make_unique()
+
+    # Subset Cells based on STAR filtering
+    selected_barcodes = pd.read_csv(os.path.join(path, 'Gene/filtered/barcodes.tsv'), header = None)
+    adata = adata[selected_barcodes[0]]
+
+    return adata
