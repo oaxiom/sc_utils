@@ -100,7 +100,76 @@ def sparsify_quicker(filename, obs_add, min_counts=2000, csv=True):
 
     return ad
 
-def sparsify(filename=None, pandas_data_frame=None, obs_add=None, csv=False, drop_fusions=False, drop_mir=False, ensg_to_symbol=None):
+def _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions=True, drop_mir=True):
+    # ensg_to_symbol must be valid to get here;
+    todrop = []
+    record_of_drops = []
+    # drop genes with - in the form, but not -AS
+    for n, e in zip(gene_names, gene_ensg):
+        if '?' in e:
+            todrop.append(e)
+            record_of_drops.append(n)
+
+        if drop_fusions and '-' in n:
+            if n == 'ERVH48-1': continue # Don't drop this gene, it's not a fusion!
+            if 'ENS' not in e: continue
+            if '-AS' in n: continue
+            if '-int' in n: continue
+            if 'Nkx' in n: continue # mouse genes
+            if 'Krtap' in n: continue
+            if ':' in n: continue # Don't drop TEs!
+            todrop.append(e)
+            record_of_drops.append(n)
+
+        if drop_mir and n[0:3] == 'MIR' or n[0:3] == 'mir':
+            if 'ENS' not in e: continue
+            if 'hg' in e.lower(): continue # host genes;
+            if ':' in n: continue # Don't drop TEs!
+            todrop.append(e)
+            record_of_drops.append(n)
+
+    data.drop(todrop, axis=1, inplace=True)
+    gene_names = []
+    gene_ensg = data.columns # remap; # rebuild the gene names inde to avoid probelms with duplicate name/ensg? drops
+    for ensg in gene_ensg:
+        if ensg not in ensg_to_symbol:
+            gene_names.append(ensg)
+            #print(f'Warning: {ensg} not found')
+        else:
+            gene_names.append(ensg_to_symbol[ensg])
+    return todrop, gene_names, gene_ensg
+
+def _load_velocyte_mtx(path):
+    print('Loading Spliced, Unspliced and Ambiguous matrices')
+    mtxU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=3, delimiter=' ')
+    mtxS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=3, delimiter=' ')
+    mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=3, delimiter=' ')
+
+    # Extract sparse matrix shape informations from the third row
+    shapeU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+    shapeS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+    shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+
+    # Read the sparse matrix with csr_matrix((data, (row_ind, col_ind)), shape=(M, N))
+    # Subract -1 to rows and cols index because csr_matrix expects a 0 based index
+    # Transpose counts matrix to have Cells as rows and Genes as cols as expected by AnnData objects
+
+    spliced = sp.sparse.csr_matrix((mtxS[:,2], (mtxS[:,0]-1, mtxS[:,1]-1)), shape = shapeS).transpose()
+    unspliced = sp.sparse.csr_matrix((mtxU[:,2], (mtxU[:,0]-1, mtxU[:,1]-1)), shape = shapeU).transpose()
+    ambiguous = sp.sparse.csr_matrix((mtxA[:,2], (mtxA[:,0]-1, mtxA[:,1]-1)), shape = shapeA).transpose()
+
+    genes = pd.read_csv(os.path.join(path, 'Velocyto/raw/features.tsv'), sep='\t',
+        names=('gene_ids', 'feature_types'), index_col=1)
+
+    barcodes = pd.read_csv(os.path.join(path, 'Velocyto/raw/barcodes.tsv'), header=None, index_col=0)
+    barcodes.index.name = None
+
+    return spliced, unspliced, ambiguous, genes, barcodes
+
+def sparsify(filename=None, pandas_data_frame=None,
+    obs_add=None, csv=False, drop_fusions=False,
+    drop_mir=False, ensg_to_symbol=None,
+    velocyte_data=None):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
@@ -120,17 +189,22 @@ def sparsify(filename=None, pandas_data_frame=None, obs_add=None, csv=False, dro
         if csv:
             data = pd.read_csv(filename, index_col=0, header=0,
                 encoding='utf-8', compression='gzip', dtype={'x': int},
+                low_memory=False,
                 engine='c')
         else:
             data = pd.read_csv(filename, index_col=0, header=0, sep='\t',
                 encoding='utf-8', compression='gzip', dtype={'x': int},
+                low_memory=False,
                 engine='c')
     else:
         data = pandas_data_frame
 
-    print('Loaded Data Frame')
+    # data is in the form from te_clounts/scTE
+    # rows = barcode
+    # cols = genes
 
-    if ensg_to_symbol: # Fix the table so it has
+    print('Loaded Data Frame')
+    if ensg_to_symbol: # Fix the table so it has gene names in the prime slot
         gene_ensg = data.columns
         gene_names = []
 
@@ -147,54 +221,82 @@ def sparsify(filename=None, pandas_data_frame=None, obs_add=None, csv=False, dro
         gene_ensg = data.columns
 
     if drop_fusions or drop_mir:
-        # ensg_to_symbol must be valid to get here;
-        todrop = []
-        record_of_drops = []
-        # drop genes with - in the form, but not -AS
-        for n, e in zip(gene_names, gene_ensg):
-            if '?' in e:
-                todrop.append(e)
-                record_of_drops.append(n)
-
-            if drop_fusions and '-' in n:
-                if n == 'ERVH48-1': continue # Don't drop this gene, it's not a fusion!
-                if 'ENS' not in e: continue
-                if '-AS' in n: continue
-                if '-int' in n: continue
-                if 'Nkx' in n: continue # mouse genes
-                if 'Krtap' in n: continue
-                if ':' in n: continue # Don't drop TEs!
-                todrop.append(e)
-                record_of_drops.append(n)
-
-            if drop_mir and n[0:3] == 'MIR' or n[0:3] == 'mir':
-                if 'ENS' not in e: continue
-                if 'hg' in e.lower(): continue # host genes;
-                if ':' in n: continue # Don't drop TEs!
-                todrop.append(e)
-                record_of_drops.append(n)
-
-        data.drop(todrop, axis=1, inplace=True)
-        gene_names = []
-        gene_ensg = data.columns # remap; # rebuild the gene names inde to avoid probelms with duplicate name/ensg? drops
-        for ensg in gene_ensg:
-            if ensg not in ensg_to_symbol:
-                gene_names.append(ensg)
-                #print(f'Warning: {ensg} not found')
-            else:
-                gene_names.append(ensg_to_symbol[ensg])
-
+        todrop, gene_names, gene_ensg = _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions, drop_mir)
         print('Dropped {} fusions/mirs'.format(len(todrop)))
+
+    layers = None
+    if velocyte_data:
+        print('Velocyte data found, loading')
+        spliced, unspliced, ambiguous, vel_genes, vel_barcodes = _load_velocyte_mtx(velocyte_data)
+
+        print('Velocyte data fixing and matching barcodes genes')
+
+        # First I need to get the rows (barcodes) in data
+        vel_barcodes = {b: i for i, b in enumerate(list(vel_barcodes.index))}
+        vel_genes = {g: i for i, g in enumerate(list(vel_genes.index))}
+
+        barcode_indeces_to_keep = []
+        for bc in list(data.index):
+            # Possible to have a missing barcode?
+            barcode_indeces_to_keep.append(vel_barcodes[bc])
+
+        spliced = spliced[barcode_indeces_to_keep, :]
+        unspliced = unspliced[barcode_indeces_to_keep, :]
+        ambiguous = ambiguous[barcode_indeces_to_keep, :]
+
+        # stick a dummy 'empty' gene on the end I can use as a TE or missing gene
+        print(spliced.shape)
+        aa = np.ones([len(barcode_indeces_to_keep), 1])
+        print(aa.shape)
+
+        np.vstack((spliced, np.ones([len(barcode_indeces_to_keep), 1])))
+        np.vstack((unspliced, np.ones([len(barcode_indeces_to_keep), 1])))
+        np.vstack((ambiguous, np.ones([len(barcode_indeces_to_keep), 1])))
+
+        index_of_dummy_TE = spliced.shape[1]-1
+
+        # Now the same for the columns/genes
+        gene_indeces_to_keep = []
+        need_to_fill_in = []
+        for gene in gene_names:
+            # Possible to have a missing barcode?
+            if gene not in vel_genes:
+                gene_indeces_to_keep.append(index_of_dummy_TE)
+                continue
+
+            gene_indeces_to_keep.append(vel_genes[gene])
+
+        #print(len(gene_indeces_to_keep))
+
+        spliced = spliced[:,gene_indeces_to_keep]
+        unspliced = unspliced[:,gene_indeces_to_keep]
+        ambiguous = ambiguous[:,gene_indeces_to_keep]
+
+        width = len(gene_names)
+
+        print('Done Velocyte')
+        layers = {'spliced': spliced, 'unspliced': unspliced, 'ambiguous': ambiguous}
 
     cells = data.index
     print('Sparsifying {}'.format(data.shape))
     data = sp.sparse.csr_matrix(data.to_numpy())
     data.astype('float32')
 
+    #print(len(cells), len(gene_names))
+    #print(spliced.shape)
+    #print(unspliced.shape)
+    #print(ambiguous.shape)
+    #print(data.shape)
+
     print('Loaded')
-    print({'obs_names': cells})
-    ad = AnnData(data, obs={'obs_names': cells}, var={'var_names': gene_names, 'names': gene_ensg})
+    ad = AnnData(
+        data,
+        obs={'obs_names': cells},
+        var={'var_names': gene_names, 'names': gene_ensg},
+        layers=layers)
+
     del data
+
     ad.var_names_make_unique()
 
     for k in obs_add:
