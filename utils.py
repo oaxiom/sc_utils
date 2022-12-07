@@ -245,13 +245,9 @@ def sparsify(filename=None, pandas_data_frame=None,
         ambiguous = ambiguous[barcode_indeces_to_keep, :]
 
         # stick a dummy 'empty' gene on the end I can use as a TE or missing gene
-        print(spliced.shape)
-        aa = np.ones([len(barcode_indeces_to_keep), 1])
-        print(aa.shape)
-
-        np.vstack((spliced, np.ones([len(barcode_indeces_to_keep), 1])))
-        np.vstack((unspliced, np.ones([len(barcode_indeces_to_keep), 1])))
-        np.vstack((ambiguous, np.ones([len(barcode_indeces_to_keep), 1])))
+        np.vstack((spliced, np.zeros([len(barcode_indeces_to_keep), 1])))
+        np.vstack((unspliced, np.zeros([len(barcode_indeces_to_keep), 1])))
+        np.vstack((ambiguous, np.zeros([len(barcode_indeces_to_keep), 1])))
 
         index_of_dummy_TE = spliced.shape[1]-1
 
@@ -286,7 +282,7 @@ def sparsify(filename=None, pandas_data_frame=None,
     #print(ambiguous.shape)
     #print(data.shape)
 
-    print('Loaded')
+    print('Building AnnData object')
     ad = AnnData(
         data,
         obs={'obs_names': cells},
