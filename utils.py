@@ -272,8 +272,6 @@ def sparsify(filename=None, pandas_data_frame=None,
         unspliced = unspliced[:,gene_indeces_to_keep]
         ambiguous = ambiguous[:,gene_indeces_to_keep]
 
-        width = len(gene_names)
-
         print('Done Velocyte')
         layers = {'spliced': spliced, 'unspliced': unspliced, 'ambiguous': ambiguous}
 
