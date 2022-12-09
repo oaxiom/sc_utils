@@ -48,19 +48,17 @@ def fastqPE(filename1, filename2, gzip=True):
         yield res
     return
 
-
-def sparsify_quicker(filename, obs_add, min_counts=2000, csv=True):
+def __load_matrix(filename, csv=True):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
         AnnData object
 
+    This is slower than just loading with Pandas!
+
     '''
-    print('Started {0}'.format(filename))
-    s = time.time()
     data = []
     barcodes = []
-    __filtered = 0
     if csv:
         sep = ','
     else:
@@ -68,37 +66,42 @@ def sparsify_quicker(filename, obs_add, min_counts=2000, csv=True):
 
     oh = gzipfile.open(filename, 'rt')
     for i, line in enumerate(oh):
-        if (i+1) % 1000 == 0:
-            print(i+1)
+        if (i+1) % 10000 == 0:
+            print(f'{i+1:,}')
+
         if i == 0:
             genes = line.split(sep)[1:]
             continue
 
         t = line.split(sep)
         cts = [float(c) for c in t[1:]]
-        if sum(cts) < min_counts:
-            __filtered += 1
-            continue
         barcodes.append(t[0])
         data.append(cts)
 
-    print('Loaded Data, filtered out {} cells for min_counts={}'.format(__filtered, min_counts))
+    data = pd.DataFrame(data, index=barcodes, columns=genes) # i.e. transposed
 
-    print('Sparsifying {} cells {} genes'.format(len(data), len(data[0])))
-    data = sp.sparse.csr_matrix(numpy.array(data))
-    data.astype('float32')
+    return data
 
-    print('Load into AnnData')
-    ad = AnnData(data, obs={'obs_names': barcodes}, var={'var_names': genes})
-    del data
+def __load_genes_barcodes(filename, csv=True):
+    '''
+    **Purpose**
+        Load in genes and barcodes
 
-    for k in obs_add:
-        ad.obs[k] = obs_add[k]
+    '''
+    barcodes = []
+    if csv: sep = ','
+    else: sep = '\t'
 
-    e = time.time()
-    print('Done {:.1f}'.format(e-s))
+    oh = gzipfile.open(filename, 'rt')
+    for i, line in enumerate(oh):
+        if i == 0:
+            genes = line.strip().split(sep)[1:]
+            continue
 
-    return ad
+        t = line.split(sep)
+        barcodes.append(t[0])
+
+    return barcodes, genes
 
 def _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions=True, drop_mir=True):
     # ensg_to_symbol must be valid to get here;
@@ -192,10 +195,16 @@ def sparsify(filename=None, pandas_data_frame=None,
                 low_memory=False,
                 engine='c')
         else:
-            data = pd.read_csv(filename, index_col=0, header=0, sep='\t',
+            pdata = pd.read_csv(filename, index_col=0, header=0, sep='\t',
                 encoding='utf-8', compression='gzip', dtype={'x': int},
                 low_memory=False,
                 engine='c')
+
+            # Numpy:
+            barcodes, genes = __load_genes_barcodes(filename, csv=csv)
+            npdata = np.loadtxt(filename, delimiter='\t', skiprows=1, usecols=range(1, len(genes)+1))
+
+            data = pd.DataFrame(npdata, index=barcodes, columns=genes)
     else:
         data = pandas_data_frame
 
@@ -217,8 +226,8 @@ def sparsify(filename=None, pandas_data_frame=None,
                 gene_names.append(ensg_to_symbol[ensg])
 
     else: # Just use the inbuilt labels;
-        gene_names = list(data.columns)
-        gene_ensg = data.columns
+        gene_names = data.columns
+        gene_ensg = gene_names
 
     if drop_fusions or drop_mir:
         todrop, gene_names, gene_ensg = _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions, drop_mir)
