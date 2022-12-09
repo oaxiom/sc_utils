@@ -190,10 +190,16 @@ def sparsify(filename=None, pandas_data_frame=None,
     s = time.time()
     if filename:
         if csv:
-            data = pd.read_csv(filename, index_col=0, header=0,
+            pdata = pd.read_csv(filename, index_col=0, header=0, sep='\t',
                 encoding='utf-8', compression='gzip', dtype={'x': int},
                 low_memory=False,
                 engine='c')
+
+            # Numpy:
+            barcodes, genes = __load_genes_barcodes(filename, csv=csv)
+            npdata = np.loadtxt(filename, delimiter='\t', skiprows=1, usecols=range(1, len(genes)+1))
+
+            data = pd.DataFrame(npdata, index=barcodes, columns=genes)
         else:
             pdata = pd.read_csv(filename, index_col=0, header=0, sep='\t',
                 encoding='utf-8', compression='gzip', dtype={'x': int},
