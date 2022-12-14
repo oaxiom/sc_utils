@@ -143,18 +143,19 @@ def _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions=
     return todrop, gene_names, gene_ensg
 
 def _load_velocyte_mtx(path, load_ambiguous=False):
+
     ambiguous = None
-    print('Loading Spliced, Unspliced and Ambiguous matrices')
+    if load_ambiguous:
+        print('Loading Spliced, Unspliced and Ambiguous matrices')
+    else:
+        print('Loading Spliced and Unspliced matrices')
+
     mtxU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=3, delimiter=' ')
     mtxS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=3, delimiter=' ')
-    if load_ambiguous:
-        mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=3, delimiter=' ')
 
     # Extract sparse matrix shape informations from the third row
     shapeU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
     shapeS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
-    if load_ambiguous:
-        shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
 
     # Read the sparse matrix with csr_matrix((data, (row_ind, col_ind)), shape=(M, N))
     # Subract -1 to rows and cols index because csr_matrix expects a 0 based index
@@ -162,7 +163,10 @@ def _load_velocyte_mtx(path, load_ambiguous=False):
 
     spliced = sp.sparse.csr_matrix((mtxS[:,2], (mtxS[:,0]-1, mtxS[:,1]-1)), shape = shapeS).transpose()
     unspliced = sp.sparse.csr_matrix((mtxU[:,2], (mtxU[:,0]-1, mtxU[:,1]-1)), shape = shapeU).transpose()
+
     if load_ambiguous:
+        mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=3, delimiter=' ')
+        shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
         ambiguous = sp.sparse.csr_matrix((mtxA[:,2], (mtxA[:,0]-1, mtxA[:,1]-1)), shape = shapeA).transpose()
 
     genes = pd.read_csv(os.path.join(path, 'Velocyto/raw/features.tsv'), sep='\t',
@@ -286,7 +290,7 @@ def sparsify(filename=None, pandas_data_frame=None,
 
         spliced = spliced[:,gene_indeces_to_keep]
         unspliced = unspliced[:,gene_indeces_to_keep]
-        ambiguous = ambiguous[:,gene_indeces_to_keep]
+        if load_ambiguous: ambiguous = ambiguous[:,gene_indeces_to_keep]
 
         print('Done Velocyte')
         if load_ambiguous:
