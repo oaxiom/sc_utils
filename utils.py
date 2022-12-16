@@ -283,9 +283,9 @@ def sparsify(filename=None, pandas_data_frame=None,
             # Possible to have a missing barcode?
             if gene not in vel_genes:
                 gene_indeces_to_keep.append(index_of_dummy_TE)
-                _number_of_matched_genes += 1
                 continue
 
+            _number_of_matched_genes += 1
             gene_indeces_to_keep.append(vel_genes[gene])
 
         print(f'Number of matched genes from scTE/te_counts and Velocyto: {_number_of_matched_genes}')
