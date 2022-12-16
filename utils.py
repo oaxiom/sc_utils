@@ -250,6 +250,7 @@ def sparsify(filename=None, pandas_data_frame=None,
 
     layers = None
     if velocyte_data:
+        _number_of_matched_genes = 0 # Number of genes matched in the velocyto and scTE/te_counts
         print('Velocyte data found, loading')
         spliced, unspliced, ambiguous, vel_genes, vel_barcodes = _load_velocyte_mtx(velocyte_data, load_ambiguous)
 
@@ -282,11 +283,12 @@ def sparsify(filename=None, pandas_data_frame=None,
             # Possible to have a missing barcode?
             if gene not in vel_genes:
                 gene_indeces_to_keep.append(index_of_dummy_TE)
+                _number_of_matched_genes += 1
                 continue
 
             gene_indeces_to_keep.append(vel_genes[gene])
 
-        #print(len(gene_indeces_to_keep))
+        print(f'Number of matched genes from scTE/te_counts and Velocyto: {_number_of_matched_genes}')
 
         spliced = spliced[:,gene_indeces_to_keep]
         unspliced = unspliced[:,gene_indeces_to_keep]
