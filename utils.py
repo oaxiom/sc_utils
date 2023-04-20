@@ -317,7 +317,8 @@ def sparsify(filename=None, pandas_data_frame=None,
         data,
         obs={'obs_names': cells},
         var={'var_names': gene_names, 'names': gene_ensg},
-        layers=layers)
+        layers=layers,
+        dtype='float32')
 
     del data
 
