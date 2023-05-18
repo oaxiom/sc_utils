@@ -150,12 +150,19 @@ def _load_velocyte_mtx(path, load_ambiguous=False):
     else:
         print('Loading Spliced and Unspliced matrices')
 
-    mtxU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=3, delimiter=' ')
-    mtxS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=3, delimiter=' ')
+    try:
+        mtxU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=3, delimiter=' ')
+        shapeU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+    except FileNotFoundError:
+        mtxU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx.gz'), skiprows=3, delimiter=' ')
+        shapeU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx.gz'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
 
-    # Extract sparse matrix shape informations from the third row
-    shapeU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
-    shapeS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+    try:
+        mtxS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=3, delimiter=' ')
+        shapeS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+    except FileNotFoundError:
+        mtxS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx.gz'), skiprows=3, delimiter=' ')
+        shapeS = np.loadtxt(os.path.join(path, 'Velocyto/raw/spliced.mtx.gz'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
 
     # Read the sparse matrix with csr_matrix((data, (row_ind, col_ind)), shape=(M, N))
     # Subract -1 to rows and cols index because csr_matrix expects a 0 based index
@@ -165,14 +172,27 @@ def _load_velocyte_mtx(path, load_ambiguous=False):
     unspliced = sp.sparse.csr_matrix((mtxU[:,2], (mtxU[:,0]-1, mtxU[:,1]-1)), shape = shapeU).transpose()
 
     if load_ambiguous:
-        mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=3, delimiter=' ')
-        shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+        try:
+            mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=3, delimiter=' ')
+            shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+        except FileNotFoundError:
+            mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx.gz'), skiprows=3, delimiter=' ')
+            shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx.gz'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
+
         ambiguous = sp.sparse.csr_matrix((mtxA[:,2], (mtxA[:,0]-1, mtxA[:,1]-1)), shape = shapeA).transpose()
 
-    genes = pd.read_csv(os.path.join(path, 'Velocyto/raw/features.tsv'), sep='\t',
-        names=('gene_ids', 'feature_types'), index_col=1)
+    try:
+        genes = pd.read_csv(os.path.join(path, 'Velocyto/raw/features.tsv'), sep='\t',
+            names=('gene_ids', 'feature_types'), index_col=1)
+    except FileNotFoundError:
+        genes = pd.read_csv(os.path.join(path, 'Velocyto/raw/features.tsv.gz'), sep='\t',
+            names=('gene_ids', 'feature_types'), index_col=1)
 
-    barcodes = pd.read_csv(os.path.join(path, 'Velocyto/raw/barcodes.tsv'), header=None, index_col=0)
+    try:
+        barcodes = pd.read_csv(os.path.join(path, 'Velocyto/raw/barcodes.tsv'), header=None, index_col=0)
+    except:
+        barcodes = pd.read_csv(os.path.join(path, 'Velocyto/raw/barcodes.tsv.gz'), header=None, index_col=0)
+
     barcodes.index.name = None
 
     return spliced, unspliced, ambiguous, genes, barcodes
