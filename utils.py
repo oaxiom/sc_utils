@@ -145,8 +145,13 @@ def _drop_fusions_mir(data,
             todrop.append(e)
             record_of_drops.append(n)
 
-        if drop_ribosomes and 'RP' in n: # This only works with te_count;
+        if drop_ribosomes and n.startswith('RP'): # This only works with te_count;
             if n.startswith('RPL') or n.startswith('RPS'):
+                todrop.append(e)
+                record_of_drops.append(n)
+
+        if drop_ribosomes and n.startswith('MRP'):
+            if n.startswith('MRPL') or n.startswith('MRPS'):
                 todrop.append(e)
                 record_of_drops.append(n)
 
