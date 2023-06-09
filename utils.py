@@ -103,7 +103,16 @@ def __load_genes_barcodes(filename, csv=True):
 
     return barcodes, genes
 
-def _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions=True, drop_mir=True):
+def _drop_fusions_mir(data,
+    gene_names,
+    gene_ensg,
+    ensg_to_symbol,
+    drop_fusions:bool = True,
+    drop_mir:bool = True,
+    drop_tes:bool = True,
+    drop_ribosomes = False,
+    ):
+
     # ensg_to_symbol must be valid to get here;
     todrop = []
     record_of_drops = []
@@ -114,6 +123,7 @@ def _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions=
             record_of_drops.append(n)
 
         if drop_fusions and '-' in n:
+            if n.startswith('MT-'): continue # Used for QC
             if n == 'ERVH48-1': continue # Don't drop this gene, it's not a fusion!
             if 'ENS' not in e: continue
             if '-AS' in n: continue
@@ -130,6 +140,20 @@ def _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions=
             if ':' in n: continue # Don't drop TEs!
             todrop.append(e)
             record_of_drops.append(n)
+
+        if drop_tes and ':' in n: # This only works with te_count;
+            todrop.append(e)
+            record_of_drops.append(n)
+
+        if drop_ribosomes and 'RP' in n: # This only works with te_count;
+            if n.startswith('RPL') or n.startswith('RPS'):
+                todrop.append(e)
+                record_of_drops.append(n)
+
+        if drop_ribosomes and 'Rp' in n: # This only works with te_count;
+            if n.startswith('Rpl') or n.startswith('Rps'):
+                todrop.append(e)
+                record_of_drops.append(n)
 
     data.drop(todrop, axis=1, inplace=True)
     gene_names = []
@@ -198,10 +222,14 @@ def _load_velocyte_mtx(path, load_ambiguous=False):
     return spliced, unspliced, ambiguous, genes, barcodes
 
 def sparsify(filename=None, pandas_data_frame=None,
-    obs_add=None, csv=False, drop_fusions=False,
-    drop_mir=False, ensg_to_symbol=None,
-    load_ambiguous=False,
-    velocyte_data=None):
+    obs_add=None,
+    csv:bool = False,
+    drop_fusions:bool = False,
+    drop_mir:bool = False,
+    drop_tes:bool = False,
+    ensg_to_symbol = None,
+    load_ambiguous:bool = False,
+    velocyte_data = None):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
@@ -265,9 +293,9 @@ def sparsify(filename=None, pandas_data_frame=None,
         gene_names = data.columns
         gene_ensg = gene_names
 
-    if drop_fusions or drop_mir:
-        todrop, gene_names, gene_ensg = _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions, drop_mir)
-        print('Dropped {} fusions/mirs'.format(len(todrop)))
+    if drop_fusions or drop_mir or drop_tes:
+        todrop, gene_names, gene_ensg = _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions, drop_mir, drop_tes)
+        print('Dropped {} fusions/mirs/tes'.format(len(todrop)))
 
     layers = None
     if velocyte_data:
