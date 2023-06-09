@@ -227,6 +227,7 @@ def sparsify(filename=None, pandas_data_frame=None,
     drop_fusions:bool = False,
     drop_mir:bool = False,
     drop_tes:bool = False,
+    drop_ribosomes:bool = False,
     ensg_to_symbol = None,
     load_ambiguous:bool = False,
     velocyte_data = None):
@@ -294,7 +295,9 @@ def sparsify(filename=None, pandas_data_frame=None,
         gene_ensg = gene_names
 
     if drop_fusions or drop_mir or drop_tes:
-        todrop, gene_names, gene_ensg = _drop_fusions_mir(data, gene_names, gene_ensg, ensg_to_symbol, drop_fusions, drop_mir, drop_tes)
+        todrop, gene_names, gene_ensg = _drop_fusions_mir(data,
+            gene_names, gene_ensg, ensg_to_symbol,
+            drop_fusions, drop_mir, drop_tes, drop_ribosomes)
         print('Dropped {} fusions/mirs/tes'.format(len(todrop)))
 
     layers = None
