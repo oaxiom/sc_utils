@@ -8,6 +8,7 @@ import scanpy as sc
 import matplotlib.cm as cm
 import numpy as np
 from matplotlib import colors
+from .progress import progressbar
 
 colors1 = cm.Greys_r(np.linspace(0.8,0.9,20))
 colors2 = cm.Reds(np.linspace(0.0, 1, 100))
@@ -110,7 +111,7 @@ def _drop_fusions_mir(data,
     drop_fusions:bool = True,
     drop_mir:bool = True,
     drop_tes:bool = True,
-    drop_ribosomes = False,
+    drop_ribosomes:bool = False,
     ):
 
     # ensg_to_symbol must be valid to get here;
@@ -124,7 +125,7 @@ def _drop_fusions_mir(data,
 
         if drop_fusions and '-' in n:
             if n.startswith('MT-'): continue # Used for QC
-            if n == 'ERVH48-1': continue # Don't drop this gene, it's not a fusion!
+            if n.startswith('ERV'): continue # Don't drop this ERVs, it's not a fusion!
             if 'ENS' not in e: continue
             if '-AS' in n: continue
             if '-int' in n: continue
@@ -155,7 +156,7 @@ def _drop_fusions_mir(data,
                 todrop.append(e)
                 record_of_drops.append(n)
 
-        if drop_ribosomes and 'Rp' in n: # This only works with te_count;
+        if drop_ribosomes and n.startswith('Rp'): # This only works with te_count;
             if n.startswith('Rpl') or n.startswith('Rps'):
                 todrop.append(e)
                 record_of_drops.append(n)
@@ -516,3 +517,124 @@ def buildAnnDataFromStarForscVelo(path):
     adata = adata[selected_barcodes[0]]
 
     return adata
+
+def smartseq_to_sparse(
+    count_files:list,
+    velocyto_looms:list = None,
+    barcode_names:list = None,
+    extra_obs:dict = None,
+    extra_vars:dict = None,
+    gzip:bool = True,
+    test:int = None,
+    ):
+    '''
+
+    **Purpose**
+        Load count files into a seurat matrix
+
+    **Arguments**
+        count_files (Required)
+            list of count matrices lo load. It assumes the filenames are the barcode names,
+            unless 'barcode_names' is provided which will set the barcode names.
+
+        velocyto_looms (Optional)
+
+        gzip (Optional, default=True)
+            count_files are gzipped
+
+    **Returns**
+        An AnnData object
+    '''
+    print(f'Starting smartseq_to_sparse() with {len(count_files)} to parse')
+
+    if barcode_names: assert len(barcode_names) == len(count_files), 'count_files and barcode_names must be the same length'
+
+    ###### init features and barcodes
+
+    features_seen = []
+    if barcode_names:
+        barcodes_seen = barcode_names
+    else:
+        barcode_names = [os.path.split(f)[1].replace('.gz', '').replace('.tsv', '').replace('.csv', '') for f in count_files]
+
+    data_dict = {}
+
+    p = progressbar(len(count_files))
+    for bcidx, f in enumerate(count_files):
+        if test and bcidx > test:
+            break
+
+        # Load a table;
+        features = []
+        counts = []
+
+        oh = open(f, 'rt') if not gzip else gzipfile.open(f, 'rt')
+        for line in oh:
+            line = line.strip().split('\t')
+
+            # scTE/te_counts format;
+            features.append(line[0])
+            counts.append(int(line[1]))
+
+        if not features_seen:
+            features_seen = features # Assume first seen is the definitive version
+            features_seen_set = set(features_seen)
+        else:
+            # Make sure features match
+            assert len(features_seen_set) == len(set(features)), f'Mismatch in the length of the features_seen and the features in this sample {f}'
+            assert features_seen_set == set(features), f'The features_seen and the features in this sample {f} do not match'
+
+        bc = barcode_names[bcidx]
+        data_dict[bc] = counts
+
+        oh.close()
+        p.update(bcidx)
+
+    print('Loaded matrices')
+
+    # put data_dict into a matrix
+
+    if test:
+        m = np.array(data_dict[barcode_names[0]])
+        barcodes_used = [barcode_names[0],]
+        for bc in barcode_names[1:]: # This could be done all in one go;
+            if bc in data_dict: # in case test is being used.
+                m = np.vstack((m, data_dict[bc]))
+                barcodes_used.append(bc)
+    else: # Much faster
+        m = np.vstack(tuple(data_dict.values()))
+        barcodes_used = barcode_names
+
+    print('Build numpy matrix')
+
+    # columns are barcodes
+    # rows are features
+
+    print()
+    print(m)
+
+    m = sp.sparse.csr_matrix(m)
+    print('Sparsified')
+
+    obs = {'obs_names': barcodes_used}
+    if extra_obs:
+        obs.update(extra_obs)
+
+    var = {'var_names': features_seen}
+    if extra_vars:
+        if 'var_names' in extra_vars: # override if present;
+            var['original_var_names'] = features_seen
+            var['var_names'] = extra_vars['var_names']
+        var.update(extra_vars)
+
+    ad = AnnData(X=m,
+        obs=obs,
+        var=var, #, 'names': gene_ensg},
+        dtype='float')
+
+    # sparsify;
+
+    ###### Load  velocyto
+
+    return ad
+
