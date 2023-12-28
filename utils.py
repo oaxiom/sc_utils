@@ -623,8 +623,8 @@ def smartseq_to_sparse(
     var = {'var_names': features_seen}
     if extra_vars:
         if 'var_names' in extra_vars: # override if present;
-            var['original_var_names'] = features_seen
-            var['var_names'] = extra_vars['var_names']
+            var = {}
+            var['features_seen'] = features_seen
         var.update(extra_vars)
 
     ad = AnnData(X=m,
@@ -632,7 +632,7 @@ def smartseq_to_sparse(
         var=var, #, 'names': gene_ensg},
         dtype='float')
 
-    # sparsify;
+    ad.var_names_make_unique()
 
     ###### Load  velocyto
 
