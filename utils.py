@@ -638,3 +638,30 @@ def smartseq_to_sparse(
 
     return ad
 
+def cell_type_prop_bar(filename: str,
+                       adata: AnnData,
+                       group_by: str,
+                       bar_group_by: str,
+                       order: list = None,
+                       ) -> None:
+    from collections import defaultdict
+    from glbase3 import draw
+
+    cell_counts = adata.obs.groupby(group_by)[bar_group_by].value_counts()
+    total_counts = adata.obs[bar_group_by].value_counts()
+
+    # Convert the counts to percentages of cell type class
+
+    td = dict(cell_counts)
+    nd = defaultdict(dict)
+    for k in sorted(td):
+        clusterid = k[0]
+        sample = k[1]
+        nd[sample][clusterid] = td[k] / total_counts[sample] * 100.0
+
+    nd = {k: nd[k] for k in nd.keys()}
+    gld = draw()
+
+    print(nd)
+
+    gld.proportional_bar(filename=filename, data_dict=nd, key_order=order)
