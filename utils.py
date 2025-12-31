@@ -643,6 +643,7 @@ def cell_type_prop_bar(filename: str,
                        group_by: str,
                        bar_group_by: str,
                        order: list = None,
+                       yorder: list = None,
                        ) -> None:
     from collections import defaultdict
     from glbase3 import draw
@@ -659,7 +660,9 @@ def cell_type_prop_bar(filename: str,
         sample = k[1]
         nd[sample][clusterid] = td[k] / total_counts[sample] * 100.0
 
-    nd = {k: nd[k] for k in nd.keys()}
+    if not yorder:
+        yorder = nd.keys()
+    nd = {k: nd[k] for k in yorder}
     gld = draw()
 
     print(nd)
