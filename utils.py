@@ -172,13 +172,8 @@ def _drop_fusions_mir(data,
             gene_names.append(ensg_to_symbol[ensg])
     return todrop, gene_names, gene_ensg
 
-def _load_velocyte_mtx(path, load_ambiguous=False):
-
-    ambiguous = None
-    if load_ambiguous:
-        print('Loading Spliced, Unspliced and Ambiguous matrices')
-    else:
-        print('Loading Spliced and Unspliced matrices')
+def _load_velocyte_mtx(path: str):
+    print('Loading Spliced and Unspliced matrices')
 
     try:
         mtxU = np.loadtxt(os.path.join(path, 'Velocyto/raw/unspliced.mtx'), skiprows=3, delimiter=' ')
@@ -201,16 +196,6 @@ def _load_velocyte_mtx(path, load_ambiguous=False):
     spliced = sp.sparse.csr_matrix((mtxS[:,2], (mtxS[:,0]-1, mtxS[:,1]-1)), shape = shapeS).transpose()
     unspliced = sp.sparse.csr_matrix((mtxU[:,2], (mtxU[:,0]-1, mtxU[:,1]-1)), shape = shapeU).transpose()
 
-    if load_ambiguous:
-        try:
-            mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=3, delimiter=' ')
-            shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
-        except FileNotFoundError:
-            mtxA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx.gz'), skiprows=3, delimiter=' ')
-            shapeA = np.loadtxt(os.path.join(path, 'Velocyto/raw/ambiguous.mtx.gz'), skiprows=2, max_rows=1 ,delimiter=' ')[0:2].astype(int)
-
-        ambiguous = sp.sparse.csr_matrix((mtxA[:,2], (mtxA[:,0]-1, mtxA[:,1]-1)), shape = shapeA).transpose()
-
     try:
         genes = pd.read_csv(os.path.join(path, 'Velocyto/raw/features.tsv'), sep='\t',
             names=('gene_ids', 'feature_types'), index_col=1)
@@ -225,18 +210,46 @@ def _load_velocyte_mtx(path, load_ambiguous=False):
 
     barcodes.index.name = None
 
-    return spliced, unspliced, ambiguous, genes, barcodes
+    return spliced, unspliced, genes, barcodes
+
+def _match_barcodes_and_genes(data, gene_names, barcodes: list, genes: list, dummy_index:int):
+    # First I need to get the rows (barcodes) in data
+
+    vel_barcodes = {b: i for i, b in enumerate(list(barcodes))}
+    vel_genes = {g: i for i, g in enumerate(list(genes))}
+
+    barcode_indeces_to_keep = []
+    for bc in list(data.index):
+        # Possible to have a missing barcode?
+        barcode_indeces_to_keep.append(vel_barcodes[bc])
+
+    # Now the same for the columns/genes
+
+    gene_indeces_to_keep = []
+    for gene in gene_names:
+        # Possible to have a missing gene?
+        if gene not in vel_genes:
+            gene_indeces_to_keep.append(dummy_index)
+            continue
+
+        gene_indeces_to_keep.append(vel_genes[gene])
+
+    print(f'Number of matched barcodes: {len(barcode_indeces_to_keep)}/{len(barcodes)}')
+    print(f'Number of matched genes: {len(gene_indeces_to_keep)}/{len(genes)}')
+
+    return barcode_indeces_to_keep, gene_indeces_to_keep
 
 def sparsify(filename=None, pandas_data_frame=None,
-    obs_add=None,
-    csv:bool = False,
-    drop_fusions:bool = False,
-    drop_mir:bool = False,
-    drop_tes:bool = False,
-    drop_ribosomes:bool = False,
-    ensg_to_symbol = None,
-    load_ambiguous:bool = False,
-    velocyte_data = None):
+            obs_add=None,
+            csv:bool = False,
+            drop_fusions:bool = False,
+            drop_mir:bool = False,
+            drop_tes:bool = False,
+            drop_ribosomes:bool = False,
+            ensg_to_symbol = None,
+            velocyte_data = None,
+             te_counts_spliced=None,
+             te_counts_unspliced=None):
     '''
     **Purpose**
         Convert a dense array in filename into a sparse array and return a
@@ -254,27 +267,25 @@ def sparsify(filename=None, pandas_data_frame=None,
     s = time.time()
     if filename:
         if csv:
-            pdata = pd.read_csv(filename, index_col=0, header=0,
-                sep=',',
-                encoding='utf-8', compression='gzip', dtype={'x': int},
-                low_memory=False,
-                engine='c')
+            #pdata = pd.read_csv(filename, index_col=0, header=0,
+            #    sep=',',
+            #    encoding='utf-8', compression='gzip', dtype={'x': int},
+            #    low_memory=False,
+            #    engine='c')
 
             # Numpy:
             barcodes, genes = __load_genes_barcodes(filename, csv=csv)
             npdata = np.loadtxt(filename, delimiter=',', skiprows=1, usecols=range(1, len(genes)+1))
-
             data = pd.DataFrame(npdata, index=barcodes, columns=genes)
         else:
-            pdata = pd.read_csv(filename, index_col=0, header=0, sep='\t',
-                encoding='utf-8', compression='gzip', dtype={'x': int},
-                low_memory=False,
-                engine='c')
+            #pdata = pd.read_csv(filename, index_col=0, header=0, sep='\t',
+            #    encoding='utf-8', compression='gzip', dtype={'x': int},
+            #    low_memory=False,
+            #    engine='c')
 
             # Numpy:
             barcodes, genes = __load_genes_barcodes(filename, csv=csv)
             npdata = np.loadtxt(filename, delimiter='\t', skiprows=1, usecols=range(1, len(genes)+1))
-
             data = pd.DataFrame(npdata, index=barcodes, columns=genes)
     else:
         data = pandas_data_frame
@@ -307,56 +318,54 @@ def sparsify(filename=None, pandas_data_frame=None,
         print('Dropped {} fusions/mirs/tes'.format(len(todrop)))
 
     layers = None
-    if velocyte_data:
-        _number_of_matched_genes = 0 # Number of genes matched in the velocyto and scTE/te_counts
+    if velocyte_data: # Output from STAR-solo
         print('Velocyte data found, loading')
-        spliced, unspliced, ambiguous, vel_genes, vel_barcodes = _load_velocyte_mtx(velocyte_data, load_ambiguous)
+        spliced, unspliced, vel_genes, vel_barcodes = _load_velocyte_mtx(velocyte_data)
 
         print('Velocyte data fixing and matching barcodes genes')
+        # I need to infill any missing genes, so do in this akward way:
+        np.vstack((spliced, np.zeros([spliced.shape[0], 1])))
+        np.vstack((unspliced, np.zeros([unspliced.shape[1], 1])))
+        index_of_dummy_TE = spliced.shape[1] - 1
 
-        # First I need to get the rows (barcodes) in data
-        vel_barcodes = {b: i for i, b in enumerate(list(vel_barcodes.index))}
-        vel_genes = {g: i for i, g in enumerate(list(vel_genes.index))}
+        barcode_indeces_to_keep, gene_indeces_to_keep = _match_barcodes_and_genes(data, gene_names, vel_barcodes.index, vel_genes.index, index_of_dummy_TE)
+        #spliced = spliced[: ,gene_indeces_to_keep]
+        #unspliced = unspliced[: ,gene_indeces_to_keep]
 
-        barcode_indeces_to_keep = []
-        for bc in list(data.index):
-            # Possible to have a missing barcode?
-            barcode_indeces_to_keep.append(vel_barcodes[bc])
-
-        spliced = spliced[barcode_indeces_to_keep, :]
+        spliced = spliced[barcode_indeces_to_keep, :] # Must be done before gene_indeces_to_keep slice
         unspliced = unspliced[barcode_indeces_to_keep, :]
-        if load_ambiguous: ambiguous = ambiguous[barcode_indeces_to_keep, :]
-
-        # stick a dummy 'empty' gene on the end I can use as a TE or missing gene
-        np.vstack((spliced, np.zeros([len(barcode_indeces_to_keep), 1])))
-        np.vstack((unspliced, np.zeros([len(barcode_indeces_to_keep), 1])))
-        if load_ambiguous: np.vstack((ambiguous, np.zeros([len(barcode_indeces_to_keep), 1])))
-
-        index_of_dummy_TE = spliced.shape[1]-1
-
-        # Now the same for the columns/genes
-        gene_indeces_to_keep = []
-        need_to_fill_in = []
-        for gene in gene_names:
-            # Possible to have a missing barcode?
-            if gene not in vel_genes:
-                gene_indeces_to_keep.append(index_of_dummy_TE)
-                continue
-
-            _number_of_matched_genes += 1
-            gene_indeces_to_keep.append(vel_genes[gene])
-
-        print(f'Number of matched genes from scTE/te_counts and Velocyto: {_number_of_matched_genes}')
 
         spliced = spliced[:,gene_indeces_to_keep]
         unspliced = unspliced[:,gene_indeces_to_keep]
-        if load_ambiguous: ambiguous = ambiguous[:,gene_indeces_to_keep]
 
+        layers = {'spliced': spliced, 'unspliced': unspliced}
         print('Done Velocyte')
-        if load_ambiguous:
-            layers = {'spliced': spliced, 'unspliced': unspliced, 'ambiguous': ambiguous}
-        else:
-            layers = {'spliced': spliced, 'unspliced': unspliced}
+
+    if te_counts_spliced and te_counts_unspliced: # Output from te_counts;
+        # Numpy:
+        barcodes, genes = __load_genes_barcodes(te_counts_spliced, csv=csv)
+        npdata = np.loadtxt(te_counts_spliced, delimiter='\t', skiprows=1, usecols=range(1, len(genes) + 1))
+        spliced = pd.DataFrame(npdata, index=barcodes, columns=genes)
+
+        barcodes, genes = __load_genes_barcodes(te_counts_unspliced, csv=csv)
+        npdata = np.loadtxt(te_counts_unspliced, delimiter='\t', skiprows=1, usecols=range(1, len(genes) + 1))
+        unspliced = pd.DataFrame(npdata, index=barcodes, columns=genes)
+
+        print('Velocyte data fixing and matching barcodes genes')
+        # I need to infill any missing genes, so do in this akward way:
+        np.vstack((spliced, np.zeros([spliced.shape[0], 1])))
+        np.vstack((unspliced, np.zeros([unspliced.shape[1], 1])))
+        index_of_dummy_TE = spliced.shape[1] - 1
+
+        barcode_indeces_to_keep, gene_indeces_to_keep = _match_barcodes_and_genes(data, gene_names, barcodes, genes, index_of_dummy_TE)
+
+        spliced = spliced[barcode_indeces_to_keep, :] # Must be done before gene_indeces_to_keep slice
+        unspliced = unspliced[barcode_indeces_to_keep, :]
+
+        spliced = spliced[:,gene_indeces_to_keep]
+        unspliced = unspliced[:,gene_indeces_to_keep]
+
+        layers = {'spliced': spliced, 'unspliced': unspliced}
 
     cells = data.index
     print('Sparsifying {}'.format(data.shape))
