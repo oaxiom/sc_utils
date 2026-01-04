@@ -267,6 +267,7 @@ def sparsify(filename=None, pandas_data_frame=None,
     s = time.time()
     if filename:
         if csv:
+            # Seems slower:
             #pdata = pd.read_csv(filename, index_col=0, header=0,
             #    sep=',',
             #    encoding='utf-8', compression='gzip', dtype={'x': int},
@@ -278,11 +279,6 @@ def sparsify(filename=None, pandas_data_frame=None,
             npdata = np.loadtxt(filename, delimiter=',', skiprows=1, usecols=range(1, len(genes)+1))
             data = pd.DataFrame(npdata, index=barcodes, columns=genes)
         else:
-            #pdata = pd.read_csv(filename, index_col=0, header=0, sep='\t',
-            #    encoding='utf-8', compression='gzip', dtype={'x': int},
-            #    low_memory=False,
-            #    engine='c')
-
             # Numpy:
             barcodes, genes = __load_genes_barcodes(filename, csv=csv)
             npdata = np.loadtxt(filename, delimiter='\t', skiprows=1, usecols=range(1, len(genes)+1))
@@ -290,7 +286,7 @@ def sparsify(filename=None, pandas_data_frame=None,
     else:
         data = pandas_data_frame
 
-    # data is in the form from te_clounts/scTE
+    # data is in the form from te_counts/scTE
     # rows = barcode
     # cols = genes
 
@@ -325,12 +321,16 @@ def sparsify(filename=None, pandas_data_frame=None,
         print('Velocyte data fixing and matching barcodes genes')
         # I need to infill any missing genes, so do in this akward way:
         np.vstack((spliced, np.zeros([spliced.shape[0], 1])))
-        np.vstack((unspliced, np.zeros([unspliced.shape[1], 1])))
+        np.vstack((unspliced, np.zeros([unspliced.shape[0], 1])))
         index_of_dummy_TE = spliced.shape[1] - 1
 
         barcode_indeces_to_keep, gene_indeces_to_keep = _match_barcodes_and_genes(data, gene_names, vel_barcodes.index, vel_genes.index, index_of_dummy_TE)
         #spliced = spliced[: ,gene_indeces_to_keep]
         #unspliced = unspliced[: ,gene_indeces_to_keep]
+
+        print(barcode_indeces_to_keep)
+        print(spliced.shape)
+        print(data.shape)
 
         spliced = spliced[barcode_indeces_to_keep, :] # Must be done before gene_indeces_to_keep slice
         unspliced = unspliced[barcode_indeces_to_keep, :]
@@ -341,7 +341,7 @@ def sparsify(filename=None, pandas_data_frame=None,
         layers = {'spliced': spliced, 'unspliced': unspliced}
         print('Done Velocyte')
 
-    if te_counts_spliced and te_counts_unspliced: # Output from te_counts;
+    elif te_counts_spliced and te_counts_unspliced: # Output from te_counts;
         # Numpy:
         barcodes, genes = __load_genes_barcodes(te_counts_spliced, csv=csv)
         npdata = np.loadtxt(te_counts_spliced, delimiter='\t', skiprows=1, usecols=range(1, len(genes) + 1))
@@ -353,19 +353,28 @@ def sparsify(filename=None, pandas_data_frame=None,
 
         print('Velocyte data fixing and matching barcodes genes')
         # I need to infill any missing genes, so do in this akward way:
-        np.vstack((spliced, np.zeros([spliced.shape[0], 1])))
-        np.vstack((unspliced, np.zeros([unspliced.shape[1], 1])))
+        np.vstack((spliced, np.zeros([1 ,spliced.shape[1]])))
+        np.vstack((unspliced, np.zeros([1, unspliced.shape[1]])))
         index_of_dummy_TE = spliced.shape[1] - 1
 
         barcode_indeces_to_keep, gene_indeces_to_keep = _match_barcodes_and_genes(data, gene_names, barcodes, genes, index_of_dummy_TE)
 
-        spliced = spliced[barcode_indeces_to_keep, :] # Must be done before gene_indeces_to_keep slice
-        unspliced = unspliced[barcode_indeces_to_keep, :]
+        #print(barcode_indeces_to_keep)
+        print(spliced.shape)
+        print(data.shape)
 
-        spliced = spliced[:,gene_indeces_to_keep]
-        unspliced = unspliced[:,gene_indeces_to_keep]
+        spliced = spliced.iloc[barcode_indeces_to_keep, :] # Must be done before gene_indeces_to_keep slice
+        unspliced = unspliced.iloc[barcode_indeces_to_keep, :]
 
+        #print(spliced.shape)
+        #1/0
+
+        spliced = spliced.iloc[:,gene_indeces_to_keep]
+        unspliced = unspliced.iloc[:,gene_indeces_to_keep]
+
+        # te_counts are always identical to the normal matrix;
         layers = {'spliced': spliced, 'unspliced': unspliced}
+        print('Done Velocyte loading (te_counts)')
 
     cells = data.index
     print('Sparsifying {}'.format(data.shape))
@@ -384,7 +393,8 @@ def sparsify(filename=None, pandas_data_frame=None,
         obs={'obs_names': cells},
         var={'var_names': gene_names, 'names': gene_ensg},
         layers=layers,
-        dtype='float32')
+        dtype='float32'
+    )
 
     del data
 
