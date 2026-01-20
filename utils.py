@@ -104,7 +104,8 @@ def __load_genes_barcodes(filename, csv=True):
 
     return barcodes, genes
 
-def _drop_fusions_mir(data,
+def _drop_fusions_mir(
+        data,
     gene_names,
     gene_ensg,
     ensg_to_symbol,
@@ -122,6 +123,12 @@ def _drop_fusions_mir(data,
         if '?' in e:
             todrop.append(e)
             record_of_drops.append(n)
+            continue
+
+        if drop_tes and ':' in n: # This only works with te_count;
+            todrop.append(e)
+            record_of_drops.append(n)
+            continue
 
         if drop_fusions and '-' in n:
             if n.startswith('MT-'): continue # Used for QC
@@ -134,6 +141,7 @@ def _drop_fusions_mir(data,
             if ':' in n: continue # Don't drop TEs!
             todrop.append(e)
             record_of_drops.append(n)
+            continue
 
         if drop_mir and n[0:3] == 'MIR' or n[0:3] == 'mir':
             if 'ENS' not in e: continue
@@ -142,26 +150,27 @@ def _drop_fusions_mir(data,
             todrop.append(e)
             record_of_drops.append(n)
 
-        if drop_tes and ':' in n: # This only works with te_count;
-            todrop.append(e)
-            record_of_drops.append(n)
-
         if drop_ribosomes and n.startswith('RP'): # This only works with te_count;
             if n.startswith('RPL') or n.startswith('RPS'):
                 todrop.append(e)
                 record_of_drops.append(n)
+                continue
 
         if drop_ribosomes and n.startswith('MRP'):
             if n.startswith('MRPL') or n.startswith('MRPS'):
                 todrop.append(e)
                 record_of_drops.append(n)
+                continue
 
         if drop_ribosomes and n.startswith('Rp'): # This only works with te_count;
             if n.startswith('Rpl') or n.startswith('Rps'):
                 todrop.append(e)
                 record_of_drops.append(n)
+                continue
 
+    # Do the drop;
     data.drop(todrop, axis=1, inplace=True)
+
     gene_names = []
     gene_ensg = data.columns # remap; # rebuild the gene names inde to avoid probelms with duplicate name/ensg? drops
     for ensg in gene_ensg:
@@ -308,7 +317,8 @@ def sparsify(filename=None, pandas_data_frame=None,
         gene_ensg = gene_names
 
     if drop_fusions or drop_mir or drop_tes:
-        todrop, gene_names, gene_ensg = _drop_fusions_mir(data,
+        todrop, gene_names, gene_ensg = _drop_fusions_mir(
+            data, # edits inside function!
             gene_names, gene_ensg, ensg_to_symbol,
             drop_fusions, drop_mir, drop_tes, drop_ribosomes)
         print('Dropped {} fusions/mirs/tes'.format(len(todrop)))
@@ -328,9 +338,9 @@ def sparsify(filename=None, pandas_data_frame=None,
         #spliced = spliced[: ,gene_indeces_to_keep]
         #unspliced = unspliced[: ,gene_indeces_to_keep]
 
-        print(barcode_indeces_to_keep)
-        print(spliced.shape)
-        print(data.shape)
+        #print(barcode_indeces_to_keep)
+        #print(spliced.shape)
+        #print(data.shape)
 
         spliced = spliced[barcode_indeces_to_keep, :] # Must be done before gene_indeces_to_keep slice
         unspliced = unspliced[barcode_indeces_to_keep, :]
@@ -360,8 +370,8 @@ def sparsify(filename=None, pandas_data_frame=None,
         barcode_indeces_to_keep, gene_indeces_to_keep = _match_barcodes_and_genes(data, gene_names, barcodes, genes, index_of_dummy_TE)
 
         #print(barcode_indeces_to_keep)
-        print(spliced.shape)
-        print(data.shape)
+        #print(spliced.shape)
+        #print(data.shape)
 
         spliced = spliced.iloc[barcode_indeces_to_keep, :] # Must be done before gene_indeces_to_keep slice
         unspliced = unspliced.iloc[barcode_indeces_to_keep, :]
@@ -386,6 +396,12 @@ def sparsify(filename=None, pandas_data_frame=None,
     #print(unspliced.shape)
     #print(ambiguous.shape)
     #print(data.shape)
+
+    print(data.shape)
+    print(len(gene_names))
+    print(len(gene_ensg))
+    #print(gene_names)
+    #print(gene_ensg)
 
     print('Building AnnData object')
     ad = AnnData(
@@ -422,7 +438,7 @@ def export_dense(adata, gene_name_filename, group_filename, dense_filename):
     print('Save groups')
     input_groups = adata_pp.obs['groups']
     input_groups.to_csv(group_filename, sep='\t')
-    print(input_groups)
+    #print(input_groups)
     del adata_pp
 
     print('Save dense matrix')
@@ -628,10 +644,6 @@ def smartseq_to_sparse(
 
     # columns are barcodes
     # rows are features
-
-    print()
-    print(m)
-
     m = sp.sparse.csr_matrix(m)
     print('Sparsified')
 
