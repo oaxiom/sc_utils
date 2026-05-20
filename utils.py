@@ -133,6 +133,7 @@ def _drop_fusions_mir(
         if drop_fusions and '-' in n:
             if n.startswith('MT-'): continue # Used for QC
             if n.startswith('ERV'): continue # Don't drop this ERVs, it's not a fusion!
+            if n.startswith('HLA-'): continue # Don't drop! Not a fusion.
             if 'ENS' not in e: continue
             if '-AS' in n: continue
             if '-int' in n: continue
@@ -696,6 +697,6 @@ def cell_type_prop_bar(filename: str,
     nd = {k: nd[k] for k in yorder}
     gld = draw()
 
-    print(nd)
+    print('\n'.join([str(nd[k].values()) for k in nd]))
 
-    gld.proportional_bar(filename=filename, data_dict=nd, key_order=order)
+    gld.proportional_bar(filename=filename, data_dict=nd, key_order=order, already_perc=True)
