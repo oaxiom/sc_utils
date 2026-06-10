@@ -398,9 +398,9 @@ def sparsify(filename=None, pandas_data_frame=None,
     #print(ambiguous.shape)
     #print(data.shape)
 
-    print(data.shape)
-    print(len(gene_names))
-    print(len(gene_ensg))
+    #print(data.shape)
+    #print(len(gene_names))
+    #print(len(gene_ensg))
     #print(gene_names)
     #print(gene_ensg)
 
