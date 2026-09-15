@@ -410,7 +410,7 @@ def sparsify(filename=None, pandas_data_frame=None,
         obs={'obs_names': cells},
         var={'var_names': gene_names, 'names': gene_ensg},
         layers=layers,
-        dtype='float32'
+        #dtype='float32' # deprecated;
     )
 
     del data
