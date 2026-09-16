@@ -29,9 +29,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import multiprocessing as mp
+import os
+#import multiprocessing as mp
 import scanpy as sc
-from anndata import AnnData
 import numpy as np
 import pandas as pd
 import scipy as sp
@@ -69,15 +69,21 @@ def _create_linear_system(ngenes, cur_cells, cur_exprs, sphere, sizes, use_ave_c
 
     return design, output
 
-def forge_system(ng, nc, exprs, ordering, size, ref):
+def forge_system(ng,
+                 nc,
+                 exprs,
+                 ordering,
+                 size:int,
+                 ref):
+
     ncells = int(nc)
     ngenes = int(ng)
     orptr = ordering
-    SIZE = int(size)
-    rptr = np.asarray(ref, dtype=float)
+    size = int(size)
+    rptr = np.asarray(ref, dtype=float)[0]
     eptrs = np.array(exprs, order='F').T
-    out1 = np.empty(SIZE * ncells, dtype=int)
-    out2 = np.empty(SIZE * ncells, dtype=int)
+    out1 = np.empty(size * ncells, dtype=int)
+    out2 = np.empty(size * ncells, dtype=int)
     out3 = np.empty(ncells, dtype=float)
     row_optr = out1
     col_optr = out2
@@ -86,12 +92,13 @@ def forge_system(ng, nc, exprs, ordering, size, ref):
 
     for cell in range(ncells):
         combined.fill(0)
-        for index in range(SIZE):
+        for index in range(size):
             curcell = orptr[index + cell]
             combined += np.squeeze(eptrs[:, curcell])
             row_optr[index * ncells + cell] = cell
             col_optr[index * ncells + cell] = curcell
-        combined /= rptr
+        #print(combined, rptr)
+        combined /= rptr # combined /= rptr
         combined = np.partition(combined, ngenes // 2)
         halfway = ngenes // 2
         if ngenes % 2 == 0:
@@ -238,9 +245,6 @@ def QR_decomposition(design, output):
 def process_cluster(args):
     clust, indices, exprs, lib_sizes, min_mean, sizes, algorithm, lower_bound = args
 
-    print(curdex, exprs)
-    1/0
-
     curdex = indices[clust]
     cur_exprs = exprs[curdex]
     cur_libs = lib_sizes[curdex]
@@ -271,7 +275,23 @@ def process_cluster(args):
     return final_nf, ave_cell, np.mean(cur_libs)
 
 
-def compute_sum_factors(adata=AnnData, sizes=np.arange(21, 102, 5), clusters=None, min_mean=None, max_size=3000, parallelize=True, algorithm='CVXPY', stopwatch=True, plotting=True, lower_bound=0.1, normalize_counts=False, log1p=False, layer='scranPY', save_plots_dir=None):
+def compute_sum_factors(adata,
+                        sizes=np.arange(21, 102, 5),
+                        clusters:str | None = None,
+                        min_mean:float | None = None,
+                        max_size:int = 3000,
+                        parallelize:bool = True,
+                        algorithm:str = 'CVXPY',
+                        plotting:bool = True,
+                        lower_bound:float = 0.1,
+                        normalize_counts:bool = False,
+                        log1p:bool = False,
+                        save_plots_dir=None):
+    """
+    Version that support sparse matrices (or, at least semi-sparse to reduce memory explosions)
+
+    """
+
     if algorithm == 'QR' and sp.sparse.issparse(adata.X):
         raise ValueError("The input data is a sparse matrix which is not currently compatible. Convert your expression matrix to a dense array using: 'adata.X = adata.X.toarray()'")
 
@@ -303,19 +323,24 @@ def compute_sum_factors(adata=AnnData, sizes=np.arange(21, 102, 5), clusters=Non
     if max_size is not None:
         clusters = limit_cluster_size(clusters, max_size=max_size)
 
+    print(f'Found {ncells} cells')
+
     indices = [np.where(clusters == c)[0] for c in np.unique(clusters)]
 
     print(f'Using max_size={max_size} clusters have been split into {len(indices)} clusters.')
-    lib_sizes = np.sum(adata.X, axis=1) ##3
+    #lib_sizes = np.sum(adata.X, axis=1) ##3
+    lib_sizes = np.asarray(adata.X.sum(axis=1)).ravel() # original = np.sum(adata.X, axis=1), fails on matrices, works on arrays;
     lib_sizes = lib_sizes / np.mean(lib_sizes)
-    exprs = (adata.X / lib_sizes).T ##4 exprs = (adata.X.T / lib_sizes).T
-    exprs = exprs.tocsr() # Fine, as I don't have to put back
+    exprs = (adata.X.T / lib_sizes).T ##4 original == exprs = (adata.X.T / lib_sizes).T
+    exprs = exprs.tocsr() # Fine, as I just use it temporarily, to support indexing
     min_mean = guess_min_mean(adata.X, min_mean=min_mean) ##5
     print('min_mean = ', min_mean)
     clust_nf, clust_profile, clust_libsize = [], [], []
     warned_size, warned_neg = False, False
 
     if parallelize:
+        raise NotImplementedError('parallelize=True is not implemented')
+        """
         with mp.Pool() as pool:
             results = []
             for i, result in enumerate(pool.imap(process_cluster,
@@ -328,34 +353,38 @@ def compute_sum_factors(adata=AnnData, sizes=np.arange(21, 102, 5), clusters=Non
                 clust_nf.append(final_nf)
                 clust_profile.append(ave_cell)
                 clust_libsize.append(mean_lib)
+        """
     else:
+        sizes = sizes[sizes <= exprs.shape[0]]
+
         for clust in range(len(indices)):
             curdex = indices[clust]
 
             #print(curdex, exprs)
 
-            cur_exprs = exprs[curdex].todense() # slice then densify
+            cur_sparse = exprs[curdex] # csr, so fine.
             cur_libs = lib_sizes[curdex]
             cur_cells = len(curdex)
-            ave_cell = np.mean(cur_exprs, axis=0) * np.mean(cur_libs)
-            high_ave = min_mean <= ave_cell
+            ave_cell = np.asarray(cur_sparse.mean(axis=0)).ravel() * np.mean(cur_libs)
+            high_ave = ave_cell >= min_mean
             use_ave_cell = ave_cell
 
             if not high_ave.all():
-                cur_exprs = cur_exprs[:, high_ave]
+                cur_exprs = cur_sparse[:, high_ave].toarray() # Only densify when needed;
                 use_ave_cell = use_ave_cell[high_ave]
 
             ngenes = np.sum(high_ave)
             sphere = generate_sphere(cur_libs)
-            sizes = sizes[sizes <= exprs.shape[0]]
             design, output = _create_linear_system(ngenes, cur_cells, cur_exprs, sphere, sizes, use_ave_cell)
+
+            print(f'Solving cluster={clust}/{len(indices)} with {ngenes} high genes and {cur_cells} cells')
 
             if algorithm == 'QR':
                 final_nf = QR_decomposition(design, output)
             elif algorithm == 'CVXPY':
                 final_nf = solve_quadratic_cvxpy(design.T, output, cur_cells, lower_bound)
             else:
-                1/0
+                raise NotImplementedError(f'algorithm={algorithm} was not found, use QR or CVXPY')
 
             if all(final_nf > 0) == False:
                 print('Not all size factors for clust = ', clust, 'are greater than 0. Cleaning size factors.')
@@ -378,14 +407,14 @@ def compute_sum_factors(adata=AnnData, sizes=np.arange(21, 102, 5), clusters=Non
     is_pos = (final_sf > 0) & (~np.isnan(final_sf))
     final_sf = final_sf / np.mean(final_sf[is_pos])
 
-    if stopwatch:
-        print('---', round((time.time() - start_time) / 60, 2), 'mins ---')
-
     adata.obs['size_factors'] = final_sf
     print('size factor min = ', adata.obs['size_factors'].min())
     print('size factor max = ', adata.obs['size_factors'].max())
 
     if plotting:
+        if not os.path.exists(save_plots_dir):
+            os.mkdir(save_plots_dir)
+
         import matplotlib.pyplot as plt
         from matplotlib import gridspec
         from matplotlib.cm import ScalarMappable
@@ -422,25 +451,19 @@ def compute_sum_factors(adata=AnnData, sizes=np.arange(21, 102, 5), clusters=Non
         cax_pos = cax.get_position()
         cax.set_position([cax_pos.x0 - 0.08, cax_pos.y0, cax_pos.width, cax_pos.height])
 
-        if save_plots_dir is not None:
-            plt.savefig(save_plots_dir + '/scranPY_normalization.pdf', bbox_inches="tight", dpi=300)
-            temp = save_plots_dir + '/scranPY_normalization.pdf'
-            print('Saved plots to:', temp)
-            del temp
+        if save_plots_dir:
+            filename = os.path.join(save_plots_dir, 'scranPY_normalization.pdf')
+            plt.savefig(filename, bbox_inches="tight", dpi=300)
+            print(f'Saved plots to: {filename}')
 
-        #plt.savefig(plotting)
         plt.clf()
 
-    if normalize_counts == True:
+    if normalize_counts:
         print('Normalizing active adata.X matrix by dividing counts by size factors')
         adata.X /= adata.obs['size_factors'].values[:, None]
         if log1p:
             print('Transforming normalized adata.X using natural log +1')
             sc.settings.verbosity = 0
             sc.pp.log1p(adata)
-
-    if (normalize_counts) & (layer is not None):
-        print("Storing normalized (and log transformed if 'log1p=True') adata.X as layer =", layer)
-        adata.layers[layer] = adata.X.copy()
 
     return final_sf
