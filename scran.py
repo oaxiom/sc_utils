@@ -284,7 +284,7 @@ def compute_sum_factors(adata,
                         algorithm:str = 'CVXPY',
                         plotting:bool = True,
                         lower_bound:float = 0.1,
-                        normalize_counts:bool = False,
+                        normalize_counts:bool = True,
                         log1p:bool = False,
                         save_plots_dir=None):
     """
@@ -460,10 +460,10 @@ def compute_sum_factors(adata,
 
     if normalize_counts:
         print('Normalizing active adata.X matrix by dividing counts by size factors')
-        adata.X /= adata.obs['size_factors'].values[:, None]
-        if log1p:
-            print('Transforming normalized adata.X using natural log +1')
-            sc.settings.verbosity = 0
-            sc.pp.log1p(adata)
+        r, c = adata.X.nonzero()
+        rD_sp = sp.sparse.csr_matrix(((1.0 / np.array(size_factors))[r], (r, c)), shape=(adata.X.shape))
+        adata.X = adata.X.multiply(rD_sp)  # adata.X /= size_factors[:,None]
+        adata.X = sp.sparse.csr_matrix(adata.X)
+        adata.X.eliminate_zeros()
 
     return final_sf
