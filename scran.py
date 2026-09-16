@@ -394,6 +394,9 @@ def compute_sum_factors(adata,
             clust_profile.append(ave_cell)
             clust_libsize.append(np.mean(cur_libs))
 
+            del cur_exprs
+            del cur_sparse
+
     non_zeroes = np.array([np.sum(x > 0) for x in clust_profile])
     ref_col = np.argmax(non_zeroes)
 
