@@ -464,7 +464,7 @@ def compute_sum_factors(adata,
     if normalize_counts:
         print('Normalizing active adata.X matrix by dividing counts by size factors')
         r, c = adata.X.nonzero()
-        rD_sp = sp.sparse.csr_matrix(((1.0 / np.array(size_factors))[r], (r, c)), shape=(adata.X.shape))
+        rD_sp = sp.sparse.csr_matrix(((1.0 / np.array(final_sf))[r], (r, c)), shape=(adata.X.shape))
         adata.X = adata.X.multiply(rD_sp)  # adata.X /= size_factors[:,None]
         adata.X = sp.sparse.csr_matrix(adata.X)
         adata.X.eliminate_zeros()
