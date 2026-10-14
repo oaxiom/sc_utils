@@ -306,12 +306,12 @@ def compute_sum_factors(adata,
 
     if clusters.value_counts().min() < sizes.max():
         if 41 > clusters.value_counts().min(): ## we want at least 5 pool sizes to compare with
-            if 30 > clusters.value_counts().min():
-                raise ValueError("You're passing a cluster that is too small. Minimum size is 30 cells.")
-            else:
-                print("Warning: you're passing a very small cluster that contains 40 or less cells. Pool sizes have been readjusted.")
-                sizes = np.arange(11, clusters.value_counts().min(), 5)
-                sizes = np.array(sizes, dtype=int)
+            #if 30 > clusters.value_counts().min():
+            #    raise ValueError("You're passing a cluster that is too small. Minimum size is 30 cells.")
+            #else:
+            print("Warning: you're passing a very small cluster that contains 40 or less cells. Pool sizes have been readjusted.")
+            sizes = np.arange(11, clusters.value_counts().min(), 5)
+            sizes = np.array(sizes, dtype=int)
         else:
             print("Warning: you're passing a small cluster that contains less than 100 cells. Pool sizes have been readjusted.")
             sizes = np.arange(21, clusters.value_counts().min(), 5)
