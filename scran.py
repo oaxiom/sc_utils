@@ -264,9 +264,10 @@ def process_cluster(args):
 
     if algorithm == 'QR':
         final_nf = QR_decomposition(design, output)
-
     elif algorithm == 'CVXPY':
         final_nf = solve_quadratic_cvxpy(design.T, output, cur_cells, lower_bound)
+    else:
+        raise AssertionError(f'{algorithm} algorithm not found')
 
     if all(final_nf > 0) == False:
         print('Not all size factors for clust = ', clust, 'are greater than 0. Cleaning size factors.')
@@ -462,11 +463,19 @@ def compute_sum_factors(adata,
         plt.clf()
 
     if normalize_counts:
+        # This still sometimes causes a memory explosion.
         print('Normalizing active adata.X matrix by dividing counts by size factors')
+        """
         r, c = adata.X.nonzero()
         rD_sp = sp.sparse.csr_matrix(((1.0 / np.array(final_sf))[r], (r, c)), shape=(adata.X.shape))
         adata.X = adata.X.multiply(rD_sp)  # adata.X /= size_factors[:,None]
         adata.X = sp.sparse.csr_matrix(adata.X)
         adata.X.eliminate_zeros()
+        """
+        # Same, but doesn't explode memory?
+        X = adata.X.tocsr()
+        row_scale = 1.0 / np.asarray(final_sf)
+        X.data *= np.repeat(row_scale, np.diff(X.indptr))
+        adata.X = X # Should stil lbe sparse
 
     return final_sf
