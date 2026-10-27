@@ -674,9 +674,10 @@ def cell_type_prop_bar(filename: str,
                        adata: AnnData,
                        group_by: str,
                        bar_group_by: str,
-                       order: list = None,
-                       yorder: list = None,
+                       group_by_yorder: list = None,
+                       bar_group_order: list = None,
                        ) -> None:
+
     from collections import defaultdict
     from glbase3 import draw
 
@@ -690,13 +691,14 @@ def cell_type_prop_bar(filename: str,
     for k in sorted(td):
         clusterid = k[0]
         sample = k[1]
-        nd[sample][clusterid] = td[k] / total_counts[sample] * 100.0
+        nd[sample][clusterid] = int(td[k]) / total_counts[sample] * 100.0
 
-    if not yorder:
-        yorder = nd.keys()
-    nd = {k: nd[k] for k in yorder}
+    if not group_by_yorder:
+        group_by_yorder = nd.keys()
+
+    nd = {k: nd[k] for k in group_by_yorder}
     gld = draw()
 
-    print('\n'.join([str(nd[k].values()) for k in nd]))
+    #print('\n'.join([str(nd[k].values()) for k in nd]))
 
-    gld.proportional_bar(filename=filename, data_dict=nd, key_order=order, already_perc=True)
+    gld.proportional_bar(filename=filename, data_dict=nd, key_order=bar_group_order, already_perc=True)
